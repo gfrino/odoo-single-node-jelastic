@@ -104,6 +104,15 @@ if ! dpkg -s wkhtmltox 2> /dev/null | grep -q "^Version: 1:${WKHTMLTOX_VERSION}"
   "${APT_INSTALL[@]}" "$deb"
 fi
 
+# --- Extra packages for custom modules (e.g. python3-pylibdmtx) -----------------
+if [ -s "$EXTRA_PACKAGES_FILE" ]; then
+  mapfile -t extra < <(sed 's/#.*//' "$EXTRA_PACKAGES_FILE" | tr -s ' \t' '\n' | grep -E '^[a-z0-9][a-z0-9.+-]+$' || true)
+  if [ ${#extra[@]} -gt 0 ]; then
+    log "Installing extra packages from $EXTRA_PACKAGES_FILE: ${extra[*]}"
+    "${APT_INSTALL[@]}" "${extra[@]}"
+  fi
+fi
+
 # --- Odoo ---------------------------------------------------------------------
 # The exact .deb in use is kept on the /opt/odoo volume: a redeploy reinstalls the
 # same build, and update-odoo.sh can roll back to it.

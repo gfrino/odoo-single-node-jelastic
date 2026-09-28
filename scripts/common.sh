@@ -16,6 +16,9 @@ LEGACY_ADDONS_DIR=/opt/odoo/addons
 STATE_FILE=/etc/odoo/jps.env
 ODOO_CONF=/etc/odoo/odoo.conf
 ODOO_LOCAL_CONF=/etc/odoo/odoo.local.conf
+# Extra Ubuntu packages needed by custom modules (one per line, # for comments),
+# reinstalled on every redeploy.
+EXTRA_PACKAGES_FILE=/etc/odoo/apt-packages
 ODOO_DATA=/var/lib/odoo
 BACKUP_DIR=/var/backups/odoo
 ACME_ROOT=/var/www/letsencrypt

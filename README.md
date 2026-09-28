@@ -228,6 +228,7 @@ SSH:
 |---|---|
 | Any `odoo.conf` option (SMTP, limits, `log_level`, ...) | `/etc/odoo/odoo.local.conf`, in an `[options]` section. It is merged over the generated file on every Odoo start |
 | PostgreSQL settings | `/etc/postgresql/<N>/main/conf.d/99-local.conf` |
+| Ubuntu packages a module needs (e.g. `python3-pylibdmtx`) | `/etc/odoo/apt-packages`, one per line. The installer installs them, also again after every redeploy: `echo python3-pylibdmtx >> /etc/odoo/apt-packages && /opt/odoo/jps/install.sh` |
 | Custom modules | `/mnt/extra-addons/<module>`, or clone whole repositories there (`/mnt/extra-addons/oca-web`). The addons path is rebuilt on every Odoo start: `chown -R odoo:odoo /mnt/extra-addons && systemctl restart odoo`, then **Apps → Update Apps List** |
 
 Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
