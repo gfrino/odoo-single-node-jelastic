@@ -5,11 +5,20 @@ logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-log
 homepage: https://github.com/gfrino/odoo-single-node-jelastic
 # Installed by manifest.jps on the Odoo node. It can also be (re)installed on an
 # existing environment: Import → URL with this file, then choose the environment.
-# Only Ubuntu VPS nodes: nodeGroup alone would also list every classic 3-node Odoo
-# environment, where these scripts do not exist.
+# nodeGroup: cp lists every environment with a cp layer (classic Odoo ones too);
+# a nodeType filter hid the single-node environments on Infomaniak. onInstall
+# refuses nodes that were not set up by manifest.jps.
 targetNodes:
-  nodeType:
-    - ubuntu-vps
+  nodeGroup: cp
+
+onInstall:
+  - cmd[cp]: |-
+      if [ ! -x /opt/odoo/jps/status.sh ]; then
+        echo "This node was not installed with odoo-single-node-jelastic (no /opt/odoo/jps): Odoo Manager only works on those."
+        exit 1
+      fi
+      echo ok
+    user: root
 description:
   short: Domains and SSL, backups, Odoo updates and PostgreSQL upgrades.
 
