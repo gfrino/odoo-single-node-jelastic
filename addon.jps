@@ -28,17 +28,47 @@ settings:
         caption: Domains
         type: string
         required: true
+  # Filled when the form opens: builds available on nightly.odoo.com for the installed
+  # major version (scripts/list-builds.sh on the node), newest preselected.
   updateOdoo:
-    fields:
-      - name: build
-        caption: Build (YYYYMMDD)
-        type: string
-        default: latest
-      - name: updateModules
-        caption: Update all modules (-u all)
-        type: toggle
-        value: false
-        tooltip: Only needed when the release notes say a fix changes data or views.
+    fields: []
+    onBeforeInit: |
+      var envName = "${env.name}", nodeId = 0, data = null, error = "";
+      try {
+        var info = api.env.control.GetEnvInfo(envName, session);
+        var nodes = (info && info.nodes) || [];
+        for (var i = 0; i < nodes.length; i++) {
+          if (String(nodes[i].nodeGroup) == "cp") { nodeId = nodes[i].id; break; }
+        }
+        if (!nodeId) {
+          error = "Odoo node not found";
+        } else {
+          var r = api.env.control.ExecCmdById(envName, session, nodeId,
+            toJSON([{command: "bash /opt/odoo/jps/list-builds.sh", params: ""}]), false, "root");
+          if (r.result === 0) data = JSON.parse(String(r.responses[0].out));
+          else error = r.error || ("result " + r.result);
+        }
+      } catch (e) {
+        error = String(e);
+      }
+      if (data && data.builds && data.builds.length) {
+        var values = [];
+        for (var j = 0; j < data.builds.length; j++) {
+          var b = String(data.builds[j]);
+          values.push({value: b, caption: data.series + " of " + b.substr(6, 2) + "/" + b.substr(4, 2) + "/" + b.substr(0, 4) +
+            (b == String(data.installed) ? " (installed)" : "")});
+        }
+        settings.fields.push({name: "build", caption: "Build", type: "list", required: true,
+          values: values, value: values[0].value, default: values[0].value});
+      } else {
+        settings.fields.push(
+          {type: "displayfield", name: "buildsError", hideLabel: true,
+           markup: "Could not read the available builds (" + error + "). Run ☰ → Update scripts and reopen, or type a build date."},
+          {name: "build", caption: "Build (YYYYMMDD or latest)", type: "string", required: true, value: "latest", default: "latest"});
+      }
+      settings.fields.push({name: "updateModules", caption: "Update all modules (-u all)", type: "toggle",
+        value: false, default: false, tooltip: "Only needed when the release notes say a fix changes data or views."});
+      return settings;
   upgradePostgres:
     fields:
       - name: target
