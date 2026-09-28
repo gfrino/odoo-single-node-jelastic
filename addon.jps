@@ -5,8 +5,11 @@ logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-log
 homepage: https://github.com/gfrino/odoo-single-node-jelastic
 # Installed by manifest.jps on the Odoo node. It can also be (re)installed on an
 # existing environment: Import → URL with this file, then choose the environment.
+# Only Ubuntu VPS nodes: nodeGroup alone would also list every classic 3-node Odoo
+# environment, where these scripts do not exist.
 targetNodes:
-  nodeGroup: cp
+  nodeType:
+    - ubuntu-vps
 description:
   short: Domains and SSL, backups, Odoo updates and PostgreSQL upgrades.
 
