@@ -59,7 +59,7 @@ Jelastic's own SSL.
 
 | Component | Source | Version policy |
 |---|---|---|
-| Ubuntu | Jelastic `ubuntu-vps` template | 24.04 or later (the installer stops on older releases) |
+| Ubuntu | Jelastic `ubuntu-vps` template, tag `24.04` | Pinned in the manifest; the installer also stops on anything older than 24.04 |
 | Odoo | Official `.deb` from [nightly.odoo.com](https://nightly.odoo.com), **stable** branch: the same package the official Docker image is built from | Pinned to the build installed; changes only via **Update Odoo** |
 | PostgreSQL | Official [PGDG](https://www.postgresql.org/download/linux/ubuntu/) repository | Newest major at install time (18 today); minor releases automatic |
 | nginx, certbot | Ubuntu | Security updates automatic |
@@ -134,7 +134,7 @@ Running any script twice gives the same result; no block can ever be duplicated.
 
 | Jelastic event | Action |
 |---|---|
-| Install | Download scripts → `install.sh` → `init-db.sh` → install the add-on |
+| Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → install the add-on |
 | Before redeploy | Backup (`pre-redeploy`) |
 | After redeploy | `install.sh` (reprovision on the new image) |
 | After changing cloudlets | Retune PostgreSQL and restart Odoo with new worker count |
@@ -233,6 +233,7 @@ Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 | "needs Ubuntu 24.04 or later" | The platform created the node with an older template. Redeploy the node to a 24.04 tag, then run **Update scripts** and `install.sh` over SSH |
 | Odoo does not answer | `systemctl status odoo`, `/var/log/odoo/odoo-server.log` |
 | 502 from nginx | Odoo is down or restarting: see above. `nginx -t` for config errors |
+| Custom domain unreachable, Let's Encrypt times out | The VPS firewall only opens 21/22/25 by default. The installer adds TCP 80 and 443; check **Settings → Firewall** (the success message says if it could not) |
 | **Add domain** refuses the domain | The DNS A record does not point to this node's public IP yet (or is still cached) |
 | Certificate not renewing | `certbot renew --dry-run`, `systemctl list-timers certbot.timer` |
 | Database | `runuser -u postgres -- psql odoo` |

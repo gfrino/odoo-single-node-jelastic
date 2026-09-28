@@ -24,6 +24,7 @@ globals:
   ref: main
   jps: /opt/odoo/jps
   adminPassword: ${fn.password(20)}
+  firewallNote: ""
 
 onBeforeInit: |
   var settings = jps.settings || {fields: []};
@@ -92,12 +93,16 @@ settings:
 
 nodes:
   - nodeType: ubuntu-vps
+    # Tags on Infomaniak: 24.04, 22.04, 20.04, 18.04. Pinned so the installer always
+    # gets a supported release; move to a newer one with a node redeploy.
+    tag: "24.04"
     nodeGroup: cp
     displayName: Odoo
     fixedCloudlets: 4
     cloudlets: 32
     extip: ${settings.extip}
-    isRedeploySupport: true
+    # Redeploy works on this template without isRedeploySupport (see
+    # /etc/jelastic/redeploy.conf); setting it made AddNode fail in "jem docker setup".
     volumes:
       - /etc/odoo
       - /opt/odoo
@@ -113,6 +118,7 @@ onInstall:
     user: root
   - cmd[cp]: ADMIN_PASSWORD='${globals.adminPassword}' bash ${globals.jps}/init-db.sh
     user: root
+  - openWebPorts
   - installAddon:
       id: odoo-manager
       nodeGroup: cp
@@ -133,6 +139,31 @@ onAfterSetCloudletCount[cp]:
     user: root
 
 actions:
+  # The VPS firewall only accepts 21, 22 and 25 from outside (the Jelastic resolver is
+  # allowed anyway). Direct HTTP/HTTPS on the public IP is needed for custom domains
+  # and for the Let's Encrypt HTTP-01 challenge.
+  openWebPorts:
+    script: |
+      // Not fatal: Odoo already works through the Jelastic domain; report instead.
+      var ports = [["HTTP", "80"], ["HTTPS", "443"]], failed = [];
+      for (var i = 0; i < ports.length; i++) {
+        var resp;
+        try {
+          resp = api.environment.security.AddRule({
+            envName: "${env.name}",
+            nodeGroup: "cp",
+            rule: {direction: "INPUT", name: ports[i][0], protocol: "TCP", ports: ports[i][1],
+                   src: "ALL", priority: 1080 + i, action: "ALLOW"}
+          });
+        } catch (e) {
+          resp = {result: 99, error: String(e)};
+        }
+        if (resp.result !== 0) failed.push(ports[i][1] + " (" + (resp.error || resp.result) + ")");
+      }
+      var note = failed.length ? "**Firewall:** could not open port(s) " + failed.join(", ") +
+        ". Open TCP 80 and 443 inbound in Settings → Firewall before adding a custom domain." : "";
+      return {result: 0, onAfterReturn: {setGlobals: {firewallNote: note}}};
+
   fetchScripts:
     cmd[cp]: |-
       set -e
@@ -153,6 +184,8 @@ success: |
 
   To use your own domain: point its DNS A record to the node's public IP, then open
   **Add-Ons → Odoo Manager → Add domain** on the Odoo node.
+
+  ${globals.firewallNote}
 
 # Paths are literal here: the add-on is a separate manifest without this one's globals.
 addons:
