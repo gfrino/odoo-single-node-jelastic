@@ -1,6 +1,6 @@
 type: install
 id: odoo-single-node
-version: 1.0.0
+version: 1.1.0
 name: Odoo Single Node
 homepage: https://github.com/gfrino/odoo-single-node-jelastic
 logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
@@ -110,6 +110,7 @@ nodes:
     volumes:
       - /etc/odoo
       - /opt/odoo
+      - /mnt/extra-addons
       - /var/lib/odoo
       - /var/lib/postgresql
       - /etc/postgresql

@@ -11,7 +11,7 @@ platform=${PLATFORM:-}
 tag=odoo-jps-test${platform:+-${platform//\//-}}
 docker build -q ${platform:+--platform "$platform"} -t "$tag" "$repo/tests" > /dev/null
 vols=()
-for p in etc-odoo:/etc/odoo opt-odoo:/opt/odoo var-lib-odoo:/var/lib/odoo \
+for p in etc-odoo:/etc/odoo opt-odoo:/opt/odoo extra-addons:/mnt/extra-addons var-lib-odoo:/var/lib/odoo \
          pg-data:/var/lib/postgresql pg-conf:/etc/postgresql \
          letsencrypt:/etc/letsencrypt backups:/var/backups/odoo; do
   vols+=(-v "${prefix}-${p%%:*}:${p#*:}")

@@ -10,7 +10,9 @@ set -Eeuo pipefail
 # /etc/postgresql, /etc/letsencrypt, /var/backups/odoo.
 JPS_DIR=/opt/odoo/jps
 DEB_DIR=/opt/odoo/debs
-ADDONS_DIR=/opt/odoo/addons
+ADDONS_DIR=/mnt/extra-addons
+# Where custom modules lived before 1.1 (still read if it holds modules).
+LEGACY_ADDONS_DIR=/opt/odoo/addons
 STATE_FILE=/etc/odoo/jps.env
 ODOO_CONF=/etc/odoo/odoo.conf
 ODOO_LOCAL_CONF=/etc/odoo/odoo.local.conf

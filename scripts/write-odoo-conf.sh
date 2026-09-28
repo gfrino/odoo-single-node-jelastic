@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerates /etc/odoo/odoo.conf from the saved state and the node's current size.
 # Runs as ExecStartPre of odoo.service, so every restart picks up new cloudlet limits
-# and any addons repository added under /opt/odoo/addons.
+# and any module or addons repository added under /mnt/extra-addons.
 # Local overrides: put an [options] section in /etc/odoo/odoo.local.conf.
 
 . "$(dirname "$(readlink -f "$0")")/common.sh"
@@ -20,17 +20,19 @@ workers=$(clamp "$workers" 2 32)
 cron=1
 ((workers >= 8)) && cron=2
 
-# Addons path: core addons, then /opt/odoo/addons itself if it holds modules, then
-# every first-level directory that holds modules (e.g. a git checkout of an OCA repo).
+# Addons path: core addons, then for /mnt/extra-addons (and the pre-1.1 /opt/odoo/addons)
+# the directory itself if it holds modules, plus every first-level directory that holds
+# modules (e.g. a git checkout of an OCA repository).
 is_addons_dir() { compgen -G "$1/*/__manifest__.py" > /dev/null; }
 addons_path=$ODOO_CORE_ADDONS
-if [ -d "$ADDONS_DIR" ]; then
-  is_addons_dir "$ADDONS_DIR" && addons_path+=",$ADDONS_DIR"
-  for d in "$ADDONS_DIR"/*/; do
+for root in "$ADDONS_DIR" "$LEGACY_ADDONS_DIR"; do
+  [ -d "$root" ] || continue
+  is_addons_dir "$root" && addons_path+=",$root"
+  for d in "$root"/*/; do
     d=${d%/}
     [ -d "$d" ] && is_addons_dir "$d" && addons_path+=",$d"
   done
-fi
+done
 
 # Odoo 19 turned demo data off by default and removed without_demo.
 demo_line="without_demo = all"

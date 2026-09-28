@@ -117,7 +117,8 @@ and the **same** PostgreSQL major, and finds the data where it was.
 | `/etc/postgresql` | Cluster configuration (Debian's tools need it to see the cluster) |
 | `/var/lib/odoo` | Filestore (attachments) and sessions |
 | `/etc/odoo` | `odoo.conf`, `odoo.local.conf`, `jps.env` (installer state) |
-| `/opt/odoo` | `jps/` scripts, `debs/` installed packages, `addons/` your modules |
+| `/opt/odoo` | `jps/` scripts, `debs/` installed Odoo packages |
+| `/mnt/extra-addons` | Your modules (same path as the official Odoo Docker image) |
 | `/etc/letsencrypt` | Certificates and renewal configuration |
 | `/var/backups/odoo` | Backups |
 
@@ -220,7 +221,7 @@ SSH:
 |---|---|
 | Any `odoo.conf` option (SMTP, limits, `log_level`, ...) | `/etc/odoo/odoo.local.conf`, in an `[options]` section. It is merged over the generated file on every Odoo start |
 | PostgreSQL settings | `/etc/postgresql/<N>/main/conf.d/99-local.conf` |
-| Custom modules | `/opt/odoo/addons/<module>`, or clone whole repositories there (`/opt/odoo/addons/oca-web`). The addons path is rebuilt on every Odoo start: `systemctl restart odoo` |
+| Custom modules | `/mnt/extra-addons/<module>`, or clone whole repositories there (`/mnt/extra-addons/oca-web`). The addons path is rebuilt on every Odoo start: `chown -R odoo:odoo /mnt/extra-addons && systemctl restart odoo`, then **Apps → Update Apps List** |
 
 Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 `90-odoo-jps.conf`): they are overwritten.
