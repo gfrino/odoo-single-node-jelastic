@@ -22,6 +22,8 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "${ODOO_VERSION:-}" ] || die "first install needs --version"
+[[ "${ADMIN_EMAIL:-}" =~ ^[^@[:space:]\']+@[^@[:space:]\']+\.[a-zA-Z]{2,}$ ]] ||
+  die "admin e-mail '${ADMIN_EMAIL:-}' is not an e-mail address"
 [[ " $SUPPORTED_ODOO_VERSIONS " == *" $ODOO_VERSION "* ]] || die "unsupported Odoo version $ODOO_VERSION (supported: $SUPPORTED_ODOO_VERSIONS)"
 set_state DB_NAME "$DB_NAME"
 

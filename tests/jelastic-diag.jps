@@ -1,0 +1,47 @@
+type: install
+id: odoo-single-node-diag
+name: Odoo Single Node - platform check
+description:
+  short: Creates one plain Ubuntu VPS node and reports what the platform provides. Delete the environment afterwards.
+
+onBeforeInit: |
+  var settings = {fields: []};
+  var resp = api.environment.control.GetTemplates();
+  var info = "GetTemplates failed: " + resp.result;
+  if (resp.result === 0) {
+    info = "ubuntu-vps not found";
+    for (var i = 0, n = resp.array.length; i < n; i++) {
+      var t = resp.array[i];
+      if (t.nodeType == "ubuntu-vps") {
+        try { info = JSON.stringify(t); } catch (e) { info = String(toJSON(t)); }
+        break;
+      }
+    }
+  }
+  settings.fields.push({type: "displayfield", name: "info", hideLabel: true,
+    markup: "Template ubuntu-vps: " + info.substring(0, 4000)});
+  return {result: 0, settings: settings};
+
+nodes:
+  - nodeType: ubuntu-vps
+    nodeGroup: cp
+    cloudlets: 8
+
+onInstall:
+  - cmd[cp]: |-
+      . /etc/os-release; echo "OS: $PRETTY_NAME"
+      echo "Kernel: $(uname -r)"
+      echo "RAM: $(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo) MB, CPU: $(nproc)"
+      echo "systemd: $(ps -p 1 -o comm=)"
+      echo "IPv6: $([ -s /proc/net/if_inet6 ] && echo yes || echo no)"
+      echo "Disk: $(df -h --output=size,avail / | tail -1)"
+      if apt-get update -q > /tmp/apt.log 2>&1; then echo "apt: ok"; else echo "apt: FAILED"; tail -5 /tmp/apt.log; fi
+      echo "Mounts: $(findmnt -rn -o TARGET | grep -vE '^/(proc|sys|dev|run)' | tr '\n' ' ')"
+    user: root
+  - setGlobals:
+      out: ${response.out}
+
+success: |
+  ```
+  ${globals.out}
+  ```

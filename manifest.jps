@@ -65,6 +65,8 @@ settings:
       type: string
       required: true
       default: ${user.email}
+      regex: "^[^@\\s']+@[^@\\s']+\\.[a-zA-Z]{2,}$"
+      regexText: Enter an e-mail address (it is the Odoo login and the Let's Encrypt contact)
     - name: lang
       caption: Language
       type: list
