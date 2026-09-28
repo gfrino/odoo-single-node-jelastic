@@ -2,65 +2,66 @@ type: install
 id: odoo-single-node-diag
 name: Odoo Single Node - platform check
 description:
-  short: Creates one plain Ubuntu VPS node and reports what the platform provides. Delete the environment afterwards.
+  short: Creates one Ubuntu VPS node like the real manifest (optionally with a public IP, never with volumes), tries adding a volume through the API and reports the result. Delete the environment afterwards.
 
-onBeforeInit: |
-  // Only one level of simple values: the template is a Java object with cycles.
-  function show(v) {
-    if (v === null || v === undefined) return String(v);
-    var type = typeof v;
-    if (type == "string" || type == "number" || type == "boolean") return String(v);
-    if (v.length !== undefined && typeof v != "function") {
-      var items = [];
-      for (var j = 0; j < v.length && j < 30; j++) {
-        var x = v[j];
-        items.push(x !== null && typeof x == "object" ? String(x.name || x.tag || x.version || "{obj}") : String(x));
-      }
-      return "[" + items.join(", ") + "]";
-    }
-    return "{obj}";
-  }
-  var settings = {fields: []};
-  var resp = api.environment.control.GetTemplates();
-  var info = "GetTemplates failed: " + resp.result;
-  if (resp.result === 0) {
-    info = "ubuntu-vps not found";
-    for (var i = 0, n = resp.array.length; i < n; i++) {
-      var t = resp.array[i];
-      if (String(t.nodeType) == "ubuntu-vps") {
-        var lines = [];
-        for (var k in t) {
-          try { lines.push(k + " = " + show(t[k])); } catch (e) { lines.push(k + " = <error>"); }
-        }
-        info = lines.join("<br>");
-        break;
-      }
-    }
-  }
-  settings.fields.push({type: "displayfield", name: "info", hideLabel: true,
-    markup: "<b>Template ubuntu-vps</b><br>" + String(info).substring(0, 6000)});
-  return {result: 0, settings: settings};
+globals:
+  volumeApi: not reported (onAfterReturn not supported?)
+
+settings:
+  fields:
+    - name: extip
+      caption: Public IPv4
+      type: toggle
+      value: true
 
 nodes:
   - nodeType: ubuntu-vps
+    tag: "24.04"
     nodeGroup: cp
-    cloudlets: 8
+    fixedCloudlets: 4
+    cloudlets: 32
+    extip: ${settings.extip}
 
 onInstall:
   - cmd[cp]: |-
       . /etc/os-release; echo "OS: $PRETTY_NAME"
-      echo "Kernel: $(uname -r)"
-      echo "RAM: $(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo) MB, CPU: $(nproc)"
-      echo "systemd: $(ps -p 1 -o comm=)"
-      echo "IPv6: $([ -s /proc/net/if_inet6 ] && echo yes || echo no)"
-      echo "Disk: $(df -h --output=size,avail / | tail -1)"
-      if apt-get update -q > /tmp/apt.log 2>&1; then echo "apt: ok"; else echo "apt: FAILED"; tail -5 /tmp/apt.log; fi
-      echo "Mounts: $(findmnt -rn -o TARGET | grep -vE '^/(proc|sys|dev|run)' | tr '\n' ' ')"
+      echo "IPs: $(ip -4 -o addr show scope global | awk '{print $4}' | tr '\n' ' ')"
+      echo "Route: $(ip route show default | head -1)"
+      if apt-get update -q > /tmp/apt.log 2>&1; then echo "apt: ok"; else echo "apt: FAILED"; tail -3 /tmp/apt.log; fi
+      echo "Outbound IP: $(curl -s --max-time 10 https://api.ipify.org || echo none)"
     user: root
   - setGlobals:
-      out: ${response.out}
+      net: ${response.out}
+
+  # Can volumes be added after the node exists? (API route, one test path)
+  - script: |
+      var tries = [], ok = false;
+      function attempt(label, fn) {
+        if (ok) return;
+        try {
+          var r = fn();
+          tries.push(label + ": " + r.result + (r.error ? " " + r.error : ""));
+          if (r.result === 0) ok = true;
+        } catch (e) {
+          tries.push(label + ": exception " + String(e));
+        }
+      }
+      attempt("AddContainerVolumeByGroup", function () {
+        return api.environment.control.AddContainerVolumeByGroup({envName: "${env.name}", nodeGroup: "cp", path: "/var/backups/odoo"});
+      });
+      attempt("AddContainerVolumes", function () {
+        return api.environment.control.AddContainerVolumes({envName: "${env.name}", nodeGroup: "cp", volumes: ["/var/backups/odoo"]});
+      });
+      return {result: 0, onAfterReturn: {setGlobals: {volumeApi: tries.join(" | ")}}};
+  - cmd[cp]: 'findmnt -rn -o TARGET,SOURCE /var/backups/odoo || echo "/var/backups/odoo: not a mount"'
+    user: root
+  - setGlobals:
+      mount: ${response.out}
 
 success: |
   ```
-  ${globals.out}
+  ${globals.net}
+
+  Volume API: ${globals.volumeApi}
+  ${globals.mount}
   ```
