@@ -1,0 +1,182 @@
+type: update
+id: odoo-manager
+name: Odoo Manager
+logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
+homepage: https://github.com/gfrino/odoo-single-node-jelastic
+# Installed by manifest.jps on the Odoo node. It can also be (re)installed on an
+# existing environment: Import → URL with this file, then choose the environment.
+targetNodes:
+  nodeGroup: cp
+description:
+  short: Domains and SSL, backups, Odoo updates and PostgreSQL upgrades.
+
+settings:
+  addDomain:
+    fields:
+      - name: domains
+        caption: Domains
+        type: string
+        required: true
+        placeholder: erp.example.com, www.example.com
+        tooltip: Comma-separated. Each DNS A record must already point to this node's public IP.
+  removeDomain:
+    fields:
+      - name: domains
+        caption: Domains
+        type: string
+        required: true
+  updateOdoo:
+    fields:
+      - name: build
+        caption: Build (YYYYMMDD)
+        type: string
+        default: latest
+      - name: updateModules
+        caption: Update all modules (-u all)
+        type: toggle
+        value: false
+        tooltip: Only needed when the release notes say a fix changes data or views.
+  upgradePostgres:
+    fields:
+      - name: target
+        caption: Target version
+        type: string
+        placeholder: newest available
+      - name: dropOld
+        caption: Remove the old cluster after a successful upgrade
+        type: toggle
+        value: false
+  restore:
+    fields:
+      - name: dump
+        caption: Backup file
+        type: string
+        required: true
+        placeholder: /var/backups/odoo/odoo-YYYYmmdd-HHMMSS-tag.dump
+
+# Only three buttons fit on the tile; the rest is in its ☰ menu.
+buttons:
+  - caption: Status
+    action: status
+  - caption: Update Odoo
+    action: updateOdoo
+    settings: updateOdoo
+    title: Update Odoo (same major version)
+    submitButtonText: Update
+  - caption: Backup now
+    action: backup
+
+menu:
+  - caption: Add domain
+    action: addDomain
+    settings: addDomain
+    title: Add domains with Let's Encrypt
+    submitButtonText: Add
+  - caption: Remove domain
+    action: removeDomain
+    settings: removeDomain
+    submitButtonText: Remove
+  - caption: Renew SSL now
+    action: renewSsl
+    confirmText: Force a Let's Encrypt renewal now? (It also renews automatically.)
+  - caption: List backups
+    action: listBackups
+  - caption: Restore backup
+    action: restore
+    settings: restore
+    confirmText: The current database is replaced by the backup. Continue?
+    submitButtonText: Restore
+  - caption: Upgrade PostgreSQL
+    action: upgradePostgres
+    settings: upgradePostgres
+    title: Upgrade PostgreSQL major version
+    submitButtonText: Upgrade
+  - caption: Update scripts
+    action: updateScripts
+    confirmText: Download the latest management scripts from GitHub?
+
+actions:
+  status:
+    - cmd[cp]: bash /opt/odoo/jps/status.sh
+      user: root
+    - return:
+        type: info
+        message: "```\n${response.out}\n```"
+
+  addDomain:
+    - cmd[cp]: bash /opt/odoo/jps/ssl.sh add '${settings.domains}'
+      user: root
+    - return:
+        type: success
+        message: "Certificate issued. Status:\n```\n${response.out}\n```"
+
+  removeDomain:
+    - cmd[cp]: bash /opt/odoo/jps/ssl.sh remove '${settings.domains}' && bash /opt/odoo/jps/ssl.sh status
+      user: root
+    - return:
+        type: success
+        message: "```\n${response.out}\n```"
+
+  renewSsl:
+    - cmd[cp]: bash /opt/odoo/jps/ssl.sh renew && bash /opt/odoo/jps/ssl.sh status
+      user: root
+    - return:
+        type: success
+        message: "```\n${response.out}\n```"
+
+  backup:
+    - cmd[cp]: bash /opt/odoo/jps/backup.sh --tag manual 2>/dev/null
+      user: root
+    - return:
+        type: success
+        message: "Backup created: ${response.out}"
+
+  listBackups:
+    - cmd[cp]: ls -lh /var/backups/odoo/ | grep -v '^total'; df -h /var/backups/odoo | tail -1
+      user: root
+    - return:
+        type: info
+        message: "```\n${response.out}\n```"
+
+  restore:
+    - cmd[cp]: bash /opt/odoo/jps/restore.sh '${settings.dump}'
+      user: root
+    - return:
+        type: success
+        message: Backup restored.
+
+  updateOdoo:
+    - if (${settings.updateModules:false}):
+        cmd[cp]: bash /opt/odoo/jps/update-odoo.sh --build '${settings.build}' --update-modules
+        user: root
+    - else:
+        cmd[cp]: bash /opt/odoo/jps/update-odoo.sh --build '${settings.build}'
+        user: root
+    - return:
+        type: success
+        message: "```\n${response.out}\n```"
+
+  upgradePostgres:
+    - cmd[cp]: |-
+        args=""
+        [ -n '${settings.target:}' ] && args="--to ${settings.target:}"
+        [ '${settings.dropOld:false}' = true ] && args="$args --drop-old"
+        bash /opt/odoo/jps/upgrade-postgres.sh $args
+      user: root
+    - return:
+        type: success
+        message: "```\n${response.out}\n```"
+
+  updateScripts:
+    - cmd[cp]: |-
+        set -e
+        tmp=$(mktemp -d)
+        curl -fsSL https://codeload.github.com/gfrino/odoo-single-node-jelastic/tar.gz/main | tar -xz -C "$tmp" --strip-components=1
+        cp -a "$tmp"/scripts/. /opt/odoo/jps/
+        chmod 755 /opt/odoo/jps/*.sh
+        rm -rf "$tmp"
+        echo "Scripts updated from gfrino/odoo-single-node-jelastic@main"
+      user: root
+    - return:
+        type: success
+        message: ${response.out}

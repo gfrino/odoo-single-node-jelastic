@@ -70,7 +70,14 @@ Supported Odoo versions: **17.0, 18.0, 19.0, 20.0**. Odoo 16 does not run on Ubu
 
 ## Day-to-day operations
 
-Everything is on the node: **Add-Ons → Odoo Manager**.
+Everything is on the node: **Add-Ons → Odoo Manager**. The tile shows **Status**,
+**Update Odoo** and **Backup now**; everything else is in the tile's **☰** menu.
+
+The add-on is its own manifest (`addon.jps`), so it can be reinstalled on an existing
+environment to get a newer version: uninstall it from the tile's ☰ menu, then
+**Import → URL**
+`https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/addon.jps`
+and choose the environment.
 
 | Button | What it does |
 |---|---|
@@ -254,7 +261,8 @@ Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 ## Repository layout
 
 ```
-manifest.jps               JPS: settings form, node, events, Odoo Manager add-on
+manifest.jps               JPS: settings form, node, events; installs addon.jps
+addon.jps                  Odoo Manager add-on (buttons and ☰ menu)
 scripts/
   common.sh                paths, state file, helpers (sourced by every script)
   install.sh               idempotent provisioning: first install and after redeploy
