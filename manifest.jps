@@ -1,0 +1,330 @@
+type: install
+id: odoo-single-node
+version: 1.0.0
+name: Odoo Single Node
+homepage: https://github.com/gfrino/odoo-single-node-jelastic
+logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
+targetRegions:
+  type: [vz.*, pcs.*]
+
+description:
+  short: Odoo 17-20 on a single Ubuntu 24.04 node with PostgreSQL, nginx and Let's Encrypt.
+  text: |
+    Odoo Community on **one** Ubuntu 24.04 node: Odoo from the official Odoo packages,
+    PostgreSQL from the official PostgreSQL repository, nginx and certbot.
+    All data lives on node volumes, so a redeploy of the node reinstalls the software
+    and keeps the data. The **Odoo Manager** add-on on the node adds domains with
+    Let's Encrypt, backups, Odoo updates with rollback and PostgreSQL major upgrades.
+
+ssl: true
+skipNodeEmails: true
+
+globals:
+  repo: gfrino/odoo-single-node-jelastic
+  ref: main
+  jps: /opt/odoo/jps
+  adminPassword: ${fn.password(20)}
+
+onBeforeInit: |
+  var settings = jps.settings || {fields: []};
+  var resp = api.environment.control.GetTemplates();
+  if (resp.result !== 0) return resp;
+  var hasUbuntu24 = false;
+  for (var i = 0, n = resp.array.length; i < n; i++) {
+    if (resp.array[i].nodeType == "ubuntu-vps") {
+      hasUbuntu24 = (resp.array[i].nodeTypeAliases || []).join(",").indexOf("ubuntu24") !== -1;
+      break;
+    }
+  }
+  if (!hasUbuntu24) {
+    settings.fields.push({
+      type: "displayfield", name: "noUbuntu24", hideLabel: true, markup:
+        "This platform does not list an Ubuntu 24.04 VPS template. The installer needs Ubuntu 24.04 or later and will stop if the node gets an older version."
+    });
+  }
+  return {result: 0, settings: settings};
+
+settings:
+  fields:
+    - name: version
+      caption: Odoo version
+      type: list
+      required: true
+      default: "20.0"
+      values:
+        - value: "20.0"
+          caption: Odoo 20
+        - value: "19.0"
+          caption: Odoo 19
+        - value: "18.0"
+          caption: Odoo 18
+        - value: "17.0"
+          caption: Odoo 17
+    - name: adminEmail
+      caption: Admin e-mail (login)
+      type: string
+      required: true
+      default: ${user.email}
+    - name: lang
+      caption: Language
+      type: list
+      default: en_US
+      values:
+        - value: en_US
+          caption: English
+        - value: it_IT
+          caption: Italiano
+        - value: de_CH
+          caption: Deutsch (Schweiz)
+        - value: fr_CH
+          caption: Français (Suisse)
+        - value: de_DE
+          caption: Deutsch
+        - value: fr_FR
+          caption: Français
+    - name: extip
+      caption: Public IPv4
+      type: toggle
+      value: true
+      tooltip: Needed for custom domains with Let's Encrypt (the DNS A record points to this IP).
+
+nodes:
+  - nodeType: ubuntu-vps
+    nodeGroup: cp
+    displayName: Odoo
+    fixedCloudlets: 4
+    cloudlets: 32
+    extip: ${settings.extip}
+    isRedeploySupport: true
+    volumes:
+      - /etc/odoo
+      - /opt/odoo
+      - /var/lib/odoo
+      - /var/lib/postgresql
+      - /etc/postgresql
+      - /etc/letsencrypt
+      - /var/backups/odoo
+
+onInstall:
+  - fetchScripts
+  - cmd[cp]: bash ${globals.jps}/install.sh --version ${settings.version} --email '${settings.adminEmail}' --domain ${env.domain} --lang ${settings.lang}
+    user: root
+  - cmd[cp]: ADMIN_PASSWORD='${globals.adminPassword}' bash ${globals.jps}/init-db.sh
+    user: root
+  - installAddon:
+      id: odoo-manager
+      nodeGroup: cp
+
+# A redeploy replaces the OS image and keeps the volumes: back up first, then
+# reinstall the same Odoo build and PostgreSQL version on the new image.
+onBeforeRedeployContainer[cp]:
+  - cmd[cp]: bash ${globals.jps}/backup.sh --tag pre-redeploy
+    user: root
+
+onAfterRedeployContainer[cp]:
+  - cmd[cp]: bash ${globals.jps}/install.sh
+    user: root
+
+# Vertical scaling: resize Postgres and the Odoo workers to the new RAM limit.
+onAfterSetCloudletCount[cp]:
+  - cmd[cp]: bash ${globals.jps}/tune-postgres.sh --restart && systemctl restart odoo
+    user: root
+
+actions:
+  fetchScripts:
+    cmd[cp]: |-
+      set -e
+      command -v curl > /dev/null || { apt-get update -q && apt-get install -y -q curl; }
+      tmp=$(mktemp -d)
+      curl -fsSL https://codeload.github.com/${globals.repo}/tar.gz/${globals.ref} | tar -xz -C "$tmp" --strip-components=1
+      mkdir -p ${globals.jps}
+      cp -a "$tmp"/scripts/. ${globals.jps}/
+      chmod 755 ${globals.jps}/*.sh
+      rm -rf "$tmp"
+    user: root
+
+success: |
+  **Odoo is ready:** [https://${env.domain}](https://${env.domain})
+
+  **Login:** ${settings.adminEmail}
+  **Password:** ${globals.adminPassword}
+
+  To use your own domain: point its DNS A record to the node's public IP, then open
+  **Add-Ons → Odoo Manager → Add domain** on the Odoo node.
+
+# Paths are literal here: the add-on is a separate manifest without this one's globals.
+addons:
+  - id: odoo-manager
+    type: update
+    name: Odoo Manager
+    logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
+    description:
+      short: Domains and SSL, backups, Odoo updates and PostgreSQL upgrades.
+
+    settings:
+      addDomain:
+        fields:
+          - name: domains
+            caption: Domains
+            type: string
+            required: true
+            placeholder: erp.example.com, www.example.com
+            tooltip: Comma-separated. Each DNS A record must already point to this node's public IP.
+      removeDomain:
+        fields:
+          - name: domains
+            caption: Domains
+            type: string
+            required: true
+      updateOdoo:
+        fields:
+          - name: build
+            caption: Build (YYYYMMDD)
+            type: string
+            default: latest
+          - name: updateModules
+            caption: Update all modules (-u all)
+            type: toggle
+            value: false
+            tooltip: Only needed when the release notes say a fix changes data or views.
+      upgradePostgres:
+        fields:
+          - name: target
+            caption: Target version
+            type: string
+            placeholder: newest available
+          - name: dropOld
+            caption: Remove the old cluster after a successful upgrade
+            type: toggle
+            value: false
+      restore:
+        fields:
+          - name: dump
+            caption: Backup file
+            type: string
+            required: true
+            placeholder: /var/backups/odoo/odoo-YYYYmmdd-HHMMSS-tag.dump
+
+    buttons:
+      - caption: Status
+        action: status
+      - caption: Add domain
+        action: addDomain
+        settings: addDomain
+        title: Add domains with Let's Encrypt
+        submitButtonText: Add
+      - caption: Remove domain
+        action: removeDomain
+        settings: removeDomain
+        submitButtonText: Remove
+      - caption: Renew SSL now
+        action: renewSsl
+        confirmText: Force a Let's Encrypt renewal now? (It also renews automatically.)
+      - caption: Backup now
+        action: backup
+      - caption: List backups
+        action: listBackups
+      - caption: Restore backup
+        action: restore
+        settings: restore
+        confirmText: The current database is replaced by the backup. Continue?
+        submitButtonText: Restore
+      - caption: Update Odoo
+        action: updateOdoo
+        settings: updateOdoo
+        title: Update Odoo (same major version)
+        submitButtonText: Update
+      - caption: Upgrade PostgreSQL
+        action: upgradePostgres
+        settings: upgradePostgres
+        title: Upgrade PostgreSQL major version
+        submitButtonText: Upgrade
+      - caption: Update scripts
+        action: updateScripts
+        confirmText: Download the latest management scripts from GitHub?
+
+    actions:
+      status:
+        - cmd[cp]: bash /opt/odoo/jps/status.sh
+          user: root
+        - return:
+            type: info
+            message: "```\n${response.out}\n```"
+
+      addDomain:
+        - cmd[cp]: bash /opt/odoo/jps/ssl.sh add '${settings.domains}'
+          user: root
+        - return:
+            type: success
+            message: "Certificate issued. Status:\n```\n${response.out}\n```"
+
+      removeDomain:
+        - cmd[cp]: bash /opt/odoo/jps/ssl.sh remove '${settings.domains}' && bash /opt/odoo/jps/ssl.sh status
+          user: root
+        - return:
+            type: success
+            message: "```\n${response.out}\n```"
+
+      renewSsl:
+        - cmd[cp]: bash /opt/odoo/jps/ssl.sh renew && bash /opt/odoo/jps/ssl.sh status
+          user: root
+        - return:
+            type: success
+            message: "```\n${response.out}\n```"
+
+      backup:
+        - cmd[cp]: bash /opt/odoo/jps/backup.sh --tag manual 2>/dev/null
+          user: root
+        - return:
+            type: success
+            message: "Backup created: ${response.out}"
+
+      listBackups:
+        - cmd[cp]: ls -lh /var/backups/odoo/ | grep -v '^total'; df -h /var/backups/odoo | tail -1
+          user: root
+        - return:
+            type: info
+            message: "```\n${response.out}\n```"
+
+      restore:
+        - cmd[cp]: bash /opt/odoo/jps/restore.sh '${settings.dump}'
+          user: root
+        - return:
+            type: success
+            message: Backup restored.
+
+      updateOdoo:
+        - if (${settings.updateModules:false}):
+            cmd[cp]: bash /opt/odoo/jps/update-odoo.sh --build '${settings.build}' --update-modules
+            user: root
+        - else:
+            cmd[cp]: bash /opt/odoo/jps/update-odoo.sh --build '${settings.build}'
+            user: root
+        - return:
+            type: success
+            message: "```\n${response.out}\n```"
+
+      upgradePostgres:
+        - cmd[cp]: |-
+            args=""
+            [ -n '${settings.target:}' ] && args="--to ${settings.target:}"
+            [ '${settings.dropOld:false}' = true ] && args="$args --drop-old"
+            bash /opt/odoo/jps/upgrade-postgres.sh $args
+          user: root
+        - return:
+            type: success
+            message: "```\n${response.out}\n```"
+
+      updateScripts:
+        - cmd[cp]: |-
+            set -e
+            tmp=$(mktemp -d)
+            curl -fsSL https://codeload.github.com/gfrino/odoo-single-node-jelastic/tar.gz/main | tar -xz -C "$tmp" --strip-components=1
+            cp -a "$tmp"/scripts/. /opt/odoo/jps/
+            chmod 755 /opt/odoo/jps/*.sh
+            rm -rf "$tmp"
+            echo "Scripts updated from gfrino/odoo-single-node-jelastic@main"
+          user: root
+        - return:
+            type: success
+            message: ${response.out}
