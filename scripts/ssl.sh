@@ -58,7 +58,12 @@ issue() {
   set_state LE_EMAIL "$email"
   set_state DOMAINS "${list[*]}"
   "$JPS_DIR/write-nginx.sh"
-  set_base_url "${list[0]}"
+  # Prefer the first custom domain; the environment domain only if there is no other.
+  local main=${list[0]}
+  for d in "${list[@]}"; do
+    if [ "$d" != "${ENV_DOMAIN:-}" ]; then main=$d; break; fi
+  done
+  set_base_url "$main"
 }
 
 # Links in e-mails and reports use web.base.url: point it at the main custom domain.
