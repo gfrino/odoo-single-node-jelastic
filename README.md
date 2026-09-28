@@ -134,7 +134,7 @@ Running any script twice gives the same result; no block can ever be duplicated.
 
 | Jelastic event | Action |
 |---|---|
-| Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → install the add-on |
+| Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → attach the public IP → install the add-on |
 | Before redeploy | Backup (`pre-redeploy`) |
 | After redeploy | `install.sh` (reprovision on the new image) |
 | After changing cloudlets | Retune PostgreSQL and restart Odoo with new worker count |
@@ -239,6 +239,10 @@ Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 | Database | `runuser -u postgres -- psql odoo` |
 
 ## Limits
+
+- The public IPv4 is attached at the **end** of the install, not when the node is
+  created: on Infomaniak a public IP at creation time makes the node setup fail
+  (`jem docker setup` cannot reach the Ubuntu mirror).
 
 - One node is one point of failure: keep off-node copies of the backups.
 - A public IPv4 usually costs extra, but it is needed for custom domains with Let's

@@ -25,6 +25,8 @@ globals:
   jps: /opt/odoo/jps
   adminPassword: ${fn.password(20)}
   firewallNote: ""
+  publicIpNote: ""
+  networkCheck: ""
 
 onBeforeInit: |
   var settings = jps.settings || {fields: []};
@@ -100,7 +102,9 @@ nodes:
     displayName: Odoo
     fixedCloudlets: 4
     cloudlets: 32
-    extip: ${settings.extip}
+    # No extip here: on Infomaniak a public IP at creation makes AddNode fail in
+    # "jem docker setup" (apt cannot reach the mirror yet). It is attached at the end
+    # of onInstall instead (attachPublicIp).
     # Redeploy works on this template without isRedeploySupport (see
     # /etc/jelastic/redeploy.conf); setting it made AddNode fail in "jem docker setup".
     volumes:
@@ -119,6 +123,8 @@ onInstall:
   - cmd[cp]: ADMIN_PASSWORD='${globals.adminPassword}' bash ${globals.jps}/init-db.sh
     user: root
   - openWebPorts
+  - if (${settings.extip}):
+      attachPublicIp
   - installAddon:
       id: odoo-manager
       nodeGroup: cp
@@ -164,6 +170,25 @@ actions:
         ". Open TCP 80 and 443 inbound in Settings → Firewall before adding a custom domain." : "";
       return {result: 0, onAfterReturn: {setGlobals: {firewallNote: note}}};
 
+  attachPublicIp:
+    - script: |
+        var resp;
+        try {
+          resp = api.environment.binder.AttachExtIp({envName: "${env.name}", nodeid: ${nodes.cp.master.id}});
+        } catch (e) {
+          resp = {result: 99, error: String(e)};
+        }
+        var note = resp.result === 0 ? "" : "**Public IP:** could not attach it (" + (resp.error || resp.result) +
+          "). Add it in the environment topology (Public IPv4 on the Odoo node).";
+        return {result: 0, onAfterReturn: {setGlobals: {publicIpNote: note}}};
+    # Outbound traffic must still work once the public IP is there (updates, certbot).
+    - cmd[cp]: |-
+        ip -4 -o addr show scope global | awk '{print $4}' | tr '\n' ' '
+        curl -fsS --max-time 15 -o /dev/null http://archive.ubuntu.com/ubuntu/ && echo "outbound ok" || echo "OUTBOUND FAILED after attaching the public IP"
+      user: root
+    - setGlobals:
+        networkCheck: "**Network:** ${response.out}"
+
   fetchScripts:
     cmd[cp]: |-
       set -e
@@ -186,6 +211,8 @@ success: |
   **Add-Ons → Odoo Manager → Add domain** on the Odoo node.
 
   ${globals.firewallNote}
+  ${globals.publicIpNote}
+  ${globals.networkCheck}
 
 # Paths are literal here: the add-on is a separate manifest without this one's globals.
 addons:
