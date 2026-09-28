@@ -283,6 +283,13 @@ docker rm -f t20 && tests/run-node.sh t20    # "redeploy": fresh image, same vol
 
 Tested locally on arm64: install of 17, 18, 19 and 20, reinstall and simulated
 redeploy, Odoo build update with `-u all`, PostgreSQL 17 → 18 upgrade, backup and
-restore, custom-domain TLS, rate limiting and input validation. Still to be checked on
-a real Jelastic platform: the `ubuntu-vps` default template and volumes, the add-on
-buttons, the cloudlet-change event and a real Let's Encrypt issuance.
+restore, custom-domain TLS, rate limiting and input validation.
+
+Tested on Infomaniak (Jelastic 8.14, amd64) on 28/09/2026: full import of Odoo 20
+with volumes, public IP attached after the install, TCP 80/443 opened in the firewall,
+Odoo Manager add-on installed, Let's Encrypt certificate for a custom domain and its
+`www.` issued with **Add domain**.
+
+`tests/jelastic-diag.jps` is a small manifest that creates a bare `ubuntu-vps` node
+and reports what the platform provides; it was used to find the two platform
+quirks above (public IP at creation, firewall).

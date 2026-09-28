@@ -191,7 +191,12 @@ actions:
     # Outbound traffic must still work once the public IP is there (updates, certbot).
     - cmd[cp]: |-
         ip -4 -o addr show scope global | awk '{print $4}' | tr '\n' ' '
-        curl -fsS --max-time 15 -o /dev/null http://archive.ubuntu.com/ubuntu/ && echo "outbound ok" || echo "OUTBOUND FAILED after attaching the public IP"
+        # The route through the new IP takes a few seconds to settle: retry before reporting.
+        for i in $(seq 12); do
+          if curl -fsS --max-time 10 -o /dev/null http://archive.ubuntu.com/ubuntu/; then echo "outbound ok"; exit 0; fi
+          sleep 5
+        done
+        echo "outbound still failing 60 s after attaching the public IP (check the node's network)"
       user: root
     - setGlobals:
         networkCheck: "**Network:** ${response.out}"
