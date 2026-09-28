@@ -172,9 +172,16 @@ actions:
 
   attachPublicIp:
     - script: |
-        var resp;
+        // Look the node id up here: a node placeholder was not resolved in this script.
+        var resp, nodeId = 0;
         try {
-          resp = api.environment.binder.AttachExtIp({envName: "${env.name}", nodeid: ${nodes.cp.master.id}});
+          var info = api.environment.control.GetEnvInfo({envName: "${env.name}"});
+          var nodes = (info && info.nodes) || [];
+          for (var i = 0; i < nodes.length; i++) {
+            if (String(nodes[i].nodeGroup) == "cp") { nodeId = nodes[i].id; break; }
+          }
+          resp = nodeId ? api.environment.binder.AttachExtIp({envName: "${env.name}", nodeid: nodeId})
+                        : {result: 98, error: "Odoo node not found (GetEnvInfo " + (info && info.result) + ")"};
         } catch (e) {
           resp = {result: 99, error: String(e)};
         }
