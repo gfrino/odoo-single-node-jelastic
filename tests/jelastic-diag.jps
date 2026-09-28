@@ -5,6 +5,21 @@ description:
   short: Creates one plain Ubuntu VPS node and reports what the platform provides. Delete the environment afterwards.
 
 onBeforeInit: |
+  // Only one level of simple values: the template is a Java object with cycles.
+  function show(v) {
+    if (v === null || v === undefined) return String(v);
+    var type = typeof v;
+    if (type == "string" || type == "number" || type == "boolean") return String(v);
+    if (v.length !== undefined && typeof v != "function") {
+      var items = [];
+      for (var j = 0; j < v.length && j < 30; j++) {
+        var x = v[j];
+        items.push(x !== null && typeof x == "object" ? String(x.name || x.tag || x.version || "{obj}") : String(x));
+      }
+      return "[" + items.join(", ") + "]";
+    }
+    return "{obj}";
+  }
   var settings = {fields: []};
   var resp = api.environment.control.GetTemplates();
   var info = "GetTemplates failed: " + resp.result;
@@ -12,14 +27,18 @@ onBeforeInit: |
     info = "ubuntu-vps not found";
     for (var i = 0, n = resp.array.length; i < n; i++) {
       var t = resp.array[i];
-      if (t.nodeType == "ubuntu-vps") {
-        try { info = JSON.stringify(t); } catch (e) { info = String(toJSON(t)); }
+      if (String(t.nodeType) == "ubuntu-vps") {
+        var lines = [];
+        for (var k in t) {
+          try { lines.push(k + " = " + show(t[k])); } catch (e) { lines.push(k + " = <error>"); }
+        }
+        info = lines.join("<br>");
         break;
       }
     }
   }
   settings.fields.push({type: "displayfield", name: "info", hideLabel: true,
-    markup: "Template ubuntu-vps: " + info.substring(0, 4000)});
+    markup: "<b>Template ubuntu-vps</b><br>" + String(info).substring(0, 6000)});
   return {result: 0, settings: settings};
 
 nodes:
