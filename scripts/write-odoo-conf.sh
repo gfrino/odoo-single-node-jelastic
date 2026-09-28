@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerates /etc/odoo/odoo.conf from the saved state and the node's current size.
 # Runs as ExecStartPre of odoo.service, so every restart picks up new cloudlet limits
-# and any module or addons repository added under /mnt/extra-addons.
+# and any module or addons repository added under /mnt/extra-addons or cloned under /mnt.
 # Local overrides: put an [options] section in /etc/odoo/odoo.local.conf.
 
 . "$(dirname "$(readlink -f "$0")")/common.sh"
@@ -22,7 +22,8 @@ cron=1
 
 # Addons path: core addons, then for /mnt/extra-addons (and the pre-1.1 /opt/odoo/addons)
 # the directory itself if it holds modules, plus every first-level directory that holds
-# modules (e.g. a git checkout of an OCA repository).
+# modules (e.g. a git checkout of an OCA repository), then every repository cloned
+# directly under /mnt (e.g. /mnt/extra-addons-tw).
 is_addons_dir() { compgen -G "$1/*/__manifest__.py" > /dev/null; }
 addons_path=$ODOO_CORE_ADDONS
 for root in "$ADDONS_DIR" "$LEGACY_ADDONS_DIR"; do
@@ -33,6 +34,19 @@ for root in "$ADDONS_DIR" "$LEGACY_ADDONS_DIR"; do
     [ -d "$d" ] && is_addons_dir "$d" && addons_path+=",$d"
   done
 done
+for d in /mnt/*/; do
+  d=${d%/}
+  [ "$d" = "$ADDONS_DIR" ] && continue
+  is_addons_dir "$d" && addons_path+=",$d"
+done
+
+# The same module in two places: Odoo silently uses the first one in addons_path.
+dupes=$(tr ',' '\n' <<< "${addons_path#"$ODOO_CORE_ADDONS",}" | while read -r p; do
+  for m in "$p"/*/__manifest__.py; do [ -e "$m" ] && basename "$(dirname "$m")"; done
+done | sort | uniq -d | tr '\n' ' ')
+if [ -n "$dupes" ]; then
+  log "WARNING: modules found in more than one addons directory (the first in addons_path wins): $dupes"
+fi
 
 # Odoo 19 turned demo data off by default and removed without_demo.
 demo_line="without_demo = all"

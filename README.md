@@ -229,7 +229,20 @@ SSH:
 | Any `odoo.conf` option (SMTP, limits, `log_level`, ...) | `/etc/odoo/odoo.local.conf`, in an `[options]` section. It is merged over the generated file on every Odoo start |
 | PostgreSQL settings | `/etc/postgresql/<N>/main/conf.d/99-local.conf` |
 | Ubuntu packages a module needs (e.g. `python3-pylibdmtx`) | `/etc/odoo/apt-packages`, one per line. The installer installs them, also again after every redeploy: `echo python3-pylibdmtx >> /etc/odoo/apt-packages && /opt/odoo/jps/install.sh` |
-| Custom modules | `/mnt/extra-addons/<module>`, or clone whole repositories there (`/mnt/extra-addons/oca-web`). The addons path is rebuilt on every Odoo start: `chown -R odoo:odoo /mnt/extra-addons && systemctl restart odoo`, then **Apps → Update Apps List** |
+| Custom modules | `/mnt/extra-addons/<module>`, or whole repositories: inside it (`/mnt/extra-addons/oca-web`) or cloned directly under `/mnt` (`git clone -b 20.0 … /mnt/extra-addons-tw`). The addons path is rebuilt on every Odoo start: `systemctl restart odoo`, then **Apps → Update Apps List**. If the same module is in two places, Odoo uses the first one and the conflict is logged in `/var/log/odoo-jps.log` |
+
+Example `/etc/odoo/odoo.local.conf` (any `odoo.conf` option, merged over the generated
+file when Odoo starts):
+
+```ini
+[options]
+smtp_server = mail.example.com
+smtp_port = 587
+smtp_ssl = starttls
+log_level = warn
+```
+
+`addons_path` can be set there too, but then it replaces the automatic one entirely.
 
 Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 `90-odoo-jps.conf`): they are overwritten.
