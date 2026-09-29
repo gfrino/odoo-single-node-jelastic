@@ -8,6 +8,7 @@ It replaces the three-node layout of the marketplace package (nginx balancer + O
 PostgreSQL) with one node that is cheaper, simpler to maintain and does not lose data
 on redeploy.
 
+- [Import URLs](#import-urls)
 - [Quick start](#quick-start)
 - [Why a single node](#why-a-single-node)
 - [What gets installed](#what-gets-installed)
@@ -25,9 +26,33 @@ on redeploy.
 
 ---
 
+## Import URLs
+
+Jelastic dashboard → **Import** → **URL** tab (not the JPS tab, which expects the
+manifest's content):
+
+| What | When | URL |
+|---|---|---|
+| **New environment** | Create a new Odoo environment (installs the Odoo Manager add-on too) | `https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/manifest.jps` |
+| **Odoo Manager add-on** | Update the buttons and forms on an existing environment; choose the environment and the Odoo node in the dialog | `https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/addon.jps` |
+
+To update an existing environment:
+
+1. **Scripts** (backup, SSL, updates, …): Odoo Manager → **☰ → Update scripts**.
+   No reinstall needed.
+2. **Add-on** (buttons, menus, forms): Odoo Manager tile → **☰ → Disinstalla**, then
+   import the add-on URL above. Uninstalling only removes the buttons: Odoo, data and
+   certificates are not touched. The environment only appears in the dialog once the
+   old add-on is uninstalled.
+
+GitHub may serve a cached copy of `main` for a few minutes after a push. To be sure
+to get a given version, replace `main` with the commit id in either URL, e.g.
+`…/odoo-single-node-jelastic/a33ffac/addon.jps`.
+
 ## Quick start
 
-1. Jelastic dashboard → **Import** → **URL**, paste:
+1. Jelastic dashboard → **Import** → **URL**, paste the
+   [new environment URL](#import-urls):
 
    ```
    https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/manifest.jps
