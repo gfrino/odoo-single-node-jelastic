@@ -78,16 +78,58 @@ settings:
       settings.fields.push({name: "updateModules", caption: "Update all modules (-u all)", type: "toggle",
         value: false, default: false, tooltip: "Only needed when the release notes say a fix changes data or views."});
       return settings;
+  # Filled when the form opens: installed PostgreSQL major and the newer ones in PGDG
+  # (scripts/list-pg-versions.sh on the node).
   upgradePostgres:
-    fields:
-      - name: target
-        caption: Target version
-        type: string
-        placeholder: newest available
-      - name: dropOld
-        caption: Remove the old cluster after a successful upgrade
-        type: toggle
-        value: false
+    fields: []
+    onBeforeInit: |
+      var envName = "${env.name}", nodeId = 0, data = null, error = "";
+      try {
+        var info = api.env.control.GetEnvInfo(envName, session);
+        var nodes = (info && info.nodes) || [];
+        for (var i = 0; i < nodes.length; i++) {
+          if (String(nodes[i].nodeGroup) == "cp") { nodeId = nodes[i].id; break; }
+        }
+        if (!nodeId) {
+          error = "Odoo node not found";
+        } else {
+          var r = api.env.control.ExecCmdById(envName, session, nodeId,
+            toJSON([{command: "bash /opt/odoo/jps/list-pg-versions.sh", params: ""}]), false, "root");
+          if (r.result === 0) data = JSON.parse(String(r.responses[0].out));
+          else error = r.error || ("result " + r.result);
+        }
+      } catch (e) {
+        error = String(e);
+      }
+      if (data && data.available && data.available.length) {
+        var values = [];
+        for (var j = 0; j < data.available.length; j++) {
+          var v = String(data.available[j]);
+          values.push({value: v, caption: "PostgreSQL " + v});
+        }
+        settings.fields.push(
+          {type: "displayfield", name: "pgInstalled", hideLabel: true,
+           markup: "Installed: PostgreSQL " + data.installed + ". A backup is taken first; Odoo is stopped during the upgrade."},
+          {name: "target", caption: "Upgrade to", type: "list", required: true,
+           values: values, value: values[values.length - 1].value, default: values[values.length - 1].value},
+          {name: "dropOld", caption: "Remove the old cluster after a successful upgrade", type: "toggle",
+           value: false, default: false,
+           tooltip: "Off: the old version stays on disk, stopped, so you can go back. Remove it later from this form."});
+      } else if (data) {
+        settings.fields.push(
+          {type: "displayfield", name: "pgUpToDate", hideLabel: true,
+           markup: "Already on the newest version available: PostgreSQL " + data.installed + ". Nothing to upgrade."},
+          {name: "dropOld", caption: "Remove old clusters left by previous upgrades", type: "toggle",
+           value: false, default: false});
+      } else {
+        settings.fields.push(
+          {type: "displayfield", name: "pgError", hideLabel: true,
+           markup: "Could not read the available versions (" + error + "). Run ☰ → Update scripts and reopen, or type the version."},
+          {name: "target", caption: "Target version", type: "string", placeholder: "newest available"},
+          {name: "dropOld", caption: "Remove the old cluster after a successful upgrade", type: "toggle",
+           value: false, default: false});
+      }
+      return settings;
   restore:
     fields:
       - name: dump

@@ -89,7 +89,7 @@ and choose the environment.
 | **List backups** | Backup files and free space |
 | **Restore backup** | Restores a backup; the current database is kept aside until the restore has succeeded |
 | **Update Odoo** | Installs a newer build of the **same** major version, chosen from a drop-down of the builds on nightly.odoo.com (newest preselected, installed one marked), optionally with `-u all`. Backup first, automatic rollback if Odoo does not answer afterwards |
-| **Upgrade PostgreSQL** | Major upgrade with `pg_upgradecluster`. Dump first; the old cluster is kept stopped unless you tick "remove" |
+| **Upgrade PostgreSQL** | Major upgrade with `pg_upgradecluster`, to a version chosen from a drop-down of the newer majors in PGDG (or a note that PostgreSQL is already the newest). Dump first; the old cluster is kept stopped unless you tick "remove" |
 | **Update scripts** | Downloads the latest version of these scripts from GitHub |
 
 The same scripts can be run over SSH as root, e.g. `/opt/odoo/jps/status.sh`. Every
@@ -288,6 +288,7 @@ scripts/
   backup.sh, restore.sh    backups and restore
   update-odoo.sh           same-major Odoo update with rollback
   list-builds.sh           builds available for the installed version (Update Odoo drop-down)
+  list-pg-versions.sh      newer PostgreSQL majors in PGDG (Upgrade PostgreSQL drop-down)
   upgrade-postgres.sh      PostgreSQL major upgrade
   status.sh                one-screen summary
 tests/                     local test node (Ubuntu 24.04 + systemd in Docker)
