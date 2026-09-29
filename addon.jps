@@ -130,13 +130,53 @@ settings:
            value: false, default: false});
       }
       return settings;
+  # Filled when the form opens: backups in /var/backups/odoo, newest first
+  # (scripts/list-backups.sh on the node).
   restore:
-    fields:
-      - name: dump
-        caption: Backup file
-        type: string
-        required: true
-        placeholder: /var/backups/odoo/odoo-YYYYmmdd-HHMMSS-tag.dump
+    fields: []
+    onBeforeInit: |
+      function mb(bytes) { return (bytes / 1048576).toFixed(1) + " MB"; }
+      var envName = "${env.name}", nodeId = 0, data = null, error = "";
+      try {
+        var info = api.env.control.GetEnvInfo(envName, session);
+        var nodes = (info && info.nodes) || [];
+        for (var i = 0; i < nodes.length; i++) {
+          if (String(nodes[i].nodeGroup) == "cp") { nodeId = nodes[i].id; break; }
+        }
+        if (!nodeId) {
+          error = "Odoo node not found";
+        } else {
+          var r = api.env.control.ExecCmdById(envName, session, nodeId,
+            toJSON([{command: "bash /opt/odoo/jps/list-backups.sh", params: ""}]), false, "root");
+          if (r.result === 0) data = JSON.parse(String(r.responses[0].out));
+          else error = r.error || ("result " + r.result);
+        }
+      } catch (e) {
+        error = String(e);
+      }
+      if (data && data.length) {
+        var values = [];
+        for (var j = 0; j < data.length; j++) {
+          var b = data[j], d = String(b.date);
+          values.push({value: String(b.file),
+            caption: d.substr(8, 2) + "/" + d.substr(5, 2) + "/" + d.substr(0, 4) + " " + d.substr(11, 5) +
+              " · " + b.tag + " · DB " + mb(b.db_bytes) + (b.files_bytes ? " + files " + mb(b.files_bytes) : "")});
+        }
+        settings.fields.push(
+          {name: "dump", caption: "Backup", type: "list", required: true, values: values},
+          {type: "displayfield", name: "restoreNote", hideLabel: true,
+           markup: "The current database is renamed, not deleted, until the restore has succeeded."});
+      } else if (data) {
+        settings.fields.push({type: "displayfield", name: "noBackups", hideLabel: true,
+          markup: "No backups in /var/backups/odoo yet. Use Backup now first."});
+      } else {
+        settings.fields.push(
+          {type: "displayfield", name: "backupsError", hideLabel: true,
+           markup: "Could not read the backups (" + error + "). Run ☰ → Update scripts and reopen, or type the path."},
+          {name: "dump", caption: "Backup file", type: "string", required: true,
+           placeholder: "/var/backups/odoo/odoo-YYYYmmdd-HHMMSS-tag.dump"});
+      }
+      return settings;
 
 # Only three buttons fit on the tile; the rest is in its ☰ menu.
 buttons:

@@ -87,7 +87,7 @@ and choose the environment.
 | **Renew SSL now** | Forces a renewal. Normally not needed: certbot checks twice a day |
 | **Backup now** | Database dump + filestore into `/var/backups/odoo` |
 | **List backups** | Backup files and free space |
-| **Restore backup** | Restores a backup; the current database is kept aside until the restore has succeeded |
+| **Restore backup** | Restores a backup chosen from a drop-down (date, type, size, newest first); the current database is kept aside until the restore has succeeded |
 | **Update Odoo** | Installs a newer build of the **same** major version, chosen from a drop-down of the builds on nightly.odoo.com (newest preselected, installed one marked), optionally with `-u all`. Backup first, automatic rollback if Odoo does not answer afterwards |
 | **Upgrade PostgreSQL** | Major upgrade with `pg_upgradecluster`, to a version chosen from a drop-down of the newer majors in PGDG (or a note that PostgreSQL is already the newest). Dump first; the old cluster is kept stopped unless you tick "remove" |
 | **Update scripts** | Downloads the latest version of these scripts from GitHub |
@@ -215,7 +215,7 @@ to start if the disk does not have room for it.
 > (another environment, object storage, your own server): a single node is also a
 > single point of failure.
 
-Restore from the dashboard (**Restore backup**, full path of the `.dump` file) or over
+Restore from the dashboard (**Restore backup**, choose it from the list) or over
 SSH:
 
 ```bash
@@ -289,6 +289,7 @@ scripts/
   update-odoo.sh           same-major Odoo update with rollback
   list-builds.sh           builds available for the installed version (Update Odoo drop-down)
   list-pg-versions.sh      newer PostgreSQL majors in PGDG (Upgrade PostgreSQL drop-down)
+  list-backups.sh          backups on the node (Restore backup drop-down)
   upgrade-postgres.sh      PostgreSQL major upgrade
   status.sh                one-screen summary
 tests/                     local test node (Ubuntu 24.04 + systemd in Docker)
