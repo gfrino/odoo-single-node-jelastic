@@ -166,10 +166,9 @@ settings:
         notes.push(String(e));
       }
       if (values.length) {
-        // Not "required": Jelastic does not count a preselected value as filled in and
-        // greys out the button. The action checks the selection itself.
-        settings.fields.push({name: "backupTarget", caption: "Backup to", type: "list",
-          values: values, value: values[0].value, default: values[0].value});
+        // No preselected value: with one, Jelastic kept the submit button disabled.
+        settings.fields.push({name: "backupTarget", caption: "Backup to", type: "list", required: true,
+          values: values});
         settings.fields.push({type: "displayfield", name: "connectNote", hideLabel: true,
           markup: "Every night's backup is also copied there, encrypted (7 daily, 4 weekly, 12 monthly)." +
             (notes.length ? "<br>Not listed: " + notes.join("; ") : "")});
