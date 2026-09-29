@@ -110,7 +110,7 @@ settings:
         settings.fields.push(
           {type: "displayfield", name: "pgInstalled", hideLabel: true,
            markup: "Installed: PostgreSQL " + data.installed + ". A backup is taken first; Odoo is stopped during the upgrade."},
-          {name: "target", caption: "Upgrade to", type: "list", required: true,
+          {name: "pgTarget", caption: "Upgrade to", type: "list", required: true,
            values: values, value: values[values.length - 1].value, default: values[values.length - 1].value},
           {name: "dropOld", caption: "Remove the old cluster after a successful upgrade", type: "toggle",
            value: false, default: false,
@@ -125,7 +125,7 @@ settings:
         settings.fields.push(
           {type: "displayfield", name: "pgError", hideLabel: true,
            markup: "Could not read the available versions (" + error + "). Run ☰ → Update scripts and reopen, or type the version."},
-          {name: "target", caption: "Target version", type: "string", placeholder: "newest available"},
+          {name: "pgTarget", caption: "Target version", type: "string", placeholder: "newest available"},
           {name: "dropOld", caption: "Remove the old cluster after a successful upgrade", type: "toggle",
            value: false, default: false});
       }
@@ -168,7 +168,7 @@ settings:
       if (values.length) {
         // Not "required": Jelastic does not count a preselected value as filled in and
         // greys out the button. The action checks the selection itself.
-        settings.fields.push({name: "target", caption: "Backup to", type: "list",
+        settings.fields.push({name: "backupTarget", caption: "Backup to", type: "list",
           values: values, value: values[0].value, default: values[0].value});
         settings.fields.push({type: "displayfield", name: "connectNote", hideLabel: true,
           markup: "Every night's backup is also copied there, encrypted (7 daily, 4 weekly, 12 monthly)." +
@@ -382,7 +382,7 @@ actions:
   upgradePostgres:
     - cmd[cp]: |-
         args=""
-        [ -n '${settings.target:}' ] && args="--to ${settings.target:}"
+        [ -n '${settings.pgTarget:}' ] && args="--to ${settings.pgTarget:}"
         [ '${settings.dropOld:false}' = true ] && args="$args --drop-old"
         bash /opt/odoo/jps/upgrade-postgres.sh $args
       user: root
@@ -393,7 +393,7 @@ actions:
   # Key on this node -> account on the backup node -> connect this node to it.
   connectBackup:
     - script: |
-        var sel = String("${settings.target:}").split("|"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
+        var sel = String("${settings.backupTarget:}").split("|"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
         if (!bkEnv || !repo) return {result: 99, error: "Choose a backup environment in the list first."};
         function nodeOf(envName, group) {
           var info = api.env.control.GetEnvInfo(envName, session), nodes = (info && info.nodes) || [];
