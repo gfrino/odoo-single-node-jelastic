@@ -130,6 +130,91 @@ settings:
            value: false, default: false});
       }
       return settings;
+  # Filled when the form opens: every running environment of the account with a backup
+  # node (nodeGroup "bk", from backup-storage.jps) and the repositories on it.
+  connectBackup:
+    fields: []
+    onBeforeInit: |
+      var me = "${env.name}", values = [], notes = [];
+      function nodeIn(nodes, group) {
+        for (var i = 0; i < nodes.length; i++) if (String(nodes[i].nodeGroup) == group) return nodes[i].id;
+        return 0;
+      }
+      try {
+        var envs = api.env.control.GetEnvs();
+        var infos = (envs && envs.infos) || [];
+        for (var i = 0; i < infos.length; i++) {
+          var env = infos[i].env || {}, name = String(env.envName), bk = nodeIn(infos[i].nodes || [], "bk");
+          if (!bk) continue;
+          if (env.status != 1) { notes.push(name + " is not running"); continue; }
+          var r = api.env.control.ExecCmdById(name, session, bk,
+            toJSON([{command: "bash /opt/odoo-backup/list-repos.sh", params: ""}]), false, "root");
+          if (r.result !== 0) { notes.push(name + ": " + (r.error || r.result)); continue; }
+          var repos = JSON.parse(String(r.responses[0].out)), mine = null;
+          for (var j = 0; j < repos.length; j++) if (String(repos[j].repo) == me) mine = repos[j];
+          values.push({value: name + "|" + me, caption: name + " — " + (mine
+            ? "this environment's backups (" + mine.snapshots + ", last " + (mine.last || "-") + ")"
+            : "new backup space for this environment")});
+          for (var k = 0; k < repos.length; k++) {
+            var o = repos[k];
+            if (String(o.repo) == me) continue;
+            values.push({value: name + "|" + o.repo, caption: name + " — take over the backups of " + o.repo +
+              " (" + o.snapshots + ", last " + (o.last || "-") + "): only to recover a lost environment"});
+          }
+        }
+      } catch (e) {
+        notes.push(String(e));
+      }
+      if (values.length) {
+        settings.fields.push({name: "target", caption: "Backup to", type: "list", required: true,
+          values: values, value: values[0].value, default: values[0].value});
+        settings.fields.push({type: "displayfield", name: "connectNote", hideLabel: true,
+          markup: "Every night's backup is also copied there, encrypted (7 daily, 4 weekly, 12 monthly)." +
+            (notes.length ? "<br>Not listed: " + notes.join("; ") : "")});
+      } else {
+        settings.fields.push({type: "displayfield", name: "noBackupEnv", hideLabel: true,
+          markup: "No backup environment found. Create one first: Import → URL " +
+            "https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/backup-storage.jps (same region)." +
+            (notes.length ? "<br>" + notes.join("; ") : "")});
+      }
+      return settings;
+
+  # Filled when the form opens: the snapshots in the connected backup environment.
+  remoteRestore:
+    fields: []
+    onBeforeInit: |
+      var me = "${env.name}", data = null, error = "";
+      try {
+        var info = api.env.control.GetEnvInfo(me, session), nodes = (info && info.nodes) || [], id = 0;
+        for (var i = 0; i < nodes.length; i++) if (String(nodes[i].nodeGroup) == "cp") { id = nodes[i].id; break; }
+        var r = api.env.control.ExecCmdById(me, session, id,
+          toJSON([{command: "bash /opt/odoo/jps/remote-backup.sh snapshots --json", params: ""}]), false, "root");
+        if (r.result === 0) data = JSON.parse(String(r.responses[0].out));
+        else error = r.error || ("result " + r.result);
+      } catch (e) {
+        error = String(e);
+      }
+      if (data && data.length) {
+        var values = [];
+        for (var j = 0; j < data.length; j++) {
+          var t = String(data[j].time);
+          values.push({value: String(data[j].id), caption: t.substr(8, 2) + "/" + t.substr(5, 2) + "/" + t.substr(0, 4) +
+            " " + t.substr(11, 5) + " · " + data[j].id + " · " + data[j].host});
+        }
+        settings.fields.push(
+          {name: "snapshot", caption: "Backup", type: "list", required: true, values: values},
+          {type: "displayfield", name: "remoteRestoreNote", hideLabel: true,
+           markup: "A local backup of the current state is taken first; the current database is kept aside until the restore has succeeded."});
+      } else if (data) {
+        settings.fields.push({type: "displayfield", name: "noSnapshots", hideLabel: true,
+          markup: "No backups on the backup environment yet."});
+      } else {
+        settings.fields.push({type: "displayfield", name: "remoteError", hideLabel: true,
+          markup: "Could not read the backups of the backup environment (" + error +
+            "). Connect one first (☰ → Connect backup environment), or run ☰ → Update scripts."});
+      }
+      return settings;
+
   # Filled when the form opens: backups in /var/backups/odoo, newest first
   # (scripts/list-backups.sh on the node).
   restore:
@@ -210,6 +295,18 @@ menu:
     settings: restore
     confirmText: The current database is replaced by the backup. Continue?
     submitButtonText: Restore
+  - caption: Connect backup environment
+    action: connectBackup
+    settings: connectBackup
+    title: Off-node backups to a backup environment
+    submitButtonText: Connect
+  - caption: Back up to backup environment now
+    action: remoteBackup
+  - caption: Restore from backup environment
+    action: remoteRestore
+    settings: remoteRestore
+    confirmText: The current database is replaced by the backup. Continue?
+    submitButtonText: Restore
   - caption: Upgrade PostgreSQL
     action: upgradePostgres
     settings: upgradePostgres
@@ -286,6 +383,50 @@ actions:
         [ -n '${settings.target:}' ] && args="--to ${settings.target:}"
         [ '${settings.dropOld:false}' = true ] && args="$args --drop-old"
         bash /opt/odoo/jps/upgrade-postgres.sh $args
+      user: root
+    - return:
+        type: success
+        message: "```\n${response.out}\n```"
+
+  # Key on this node -> account on the backup node -> connect this node to it.
+  connectBackup:
+    - script: |
+        var sel = String("${settings.target}").split("|"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
+        function nodeOf(envName, group) {
+          var info = api.env.control.GetEnvInfo(envName, session), nodes = (info && info.nodes) || [];
+          for (var i = 0; i < nodes.length; i++) if (String(nodes[i].nodeGroup) == group) return nodes[i].id;
+          throw "no " + group + " node in " + envName;
+        }
+        function run(envName, nodeId, command) {
+          var r = api.env.control.ExecCmdById(envName, session, nodeId, toJSON([{command: command, params: ""}]), false, "root");
+          if (r.result !== 0) throw envName + ": " + (r.error || ("result " + r.result));
+          return String(r.responses[0].out).replace(/\s+$/, "");
+        }
+        try {
+          if (!/^[a-z0-9][a-z0-9-]*$/.test(bkEnv) || !/^[a-z0-9][a-z0-9-]*$/.test(repo)) throw "invalid selection";
+          var odoo = nodeOf(me, "cp"), bk = nodeOf(bkEnv, "bk");
+          var pub = run(me, odoo, "bash /opt/odoo/jps/remote-backup.sh keygen").split("\n").pop();
+          var reg = JSON.parse(run(bkEnv, bk, "bash /opt/odoo-backup/add-client.sh '" + repo + "' '" + pub + "'").split("\n").pop());
+          var out = run(me, odoo, "bash /opt/odoo/jps/remote-backup.sh connect --host " + reg.host + " --user " + reg.user +
+            " --repo " + repo + " --env " + bkEnv + " --host-keys '" + reg.host_keys.join("|") + "' 2>&1 && " +
+            "bash /opt/odoo/jps/remote-backup.sh run 2>&1 | tail -1");
+          return {result: 0, onAfterReturn: {setGlobals: {connectOut: out}}};
+        } catch (e) {
+          return {result: 99, error: "Connect backup environment: " + e};
+        }
+    - return:
+        type: success
+        message: "```\n${globals.connectOut}\n```\nKeep the encryption password somewhere safe as well."
+
+  remoteBackup:
+    - cmd[cp]: bash /opt/odoo/jps/remote-backup.sh run 2>&1 | tail -1
+      user: root
+    - return:
+        type: success
+        message: ${response.out}
+
+  remoteRestore:
+    - cmd[cp]: bash /opt/odoo/jps/remote-backup.sh restore '${settings.snapshot}' 2>&1 | tail -3
       user: root
     - return:
         type: success

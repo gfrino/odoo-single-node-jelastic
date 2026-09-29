@@ -54,7 +54,7 @@ ensure_user postgres "$PG_UID" /var/lib/postgresql /bin/bash
 
 # --- Base packages -----------------------------------------------------------
 apt-get update -q
-"${APT_INSTALL[@]}" ca-certificates curl gnupg iproute2 locales openssl nginx certbot \
+"${APT_INSTALL[@]}" ca-certificates curl gnupg iproute2 locales openssl nginx certbot restic openssh-client \
   unattended-upgrades python3 python3-pip xz-utils fonts-noto-cjk node-less \
   python3-magic python3-markdown2 python3-num2words python3-odf python3-pdfminer python3-phonenumbers \
   python3-pyldap python3-qrcode python3-renderpm python3-setuptools python3-slugify \
@@ -179,6 +179,30 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+# --- Off-node copy to the backup environment (only once one is connected) --------
+cat > /etc/systemd/system/odoo-remote-backup.service << EOF
+[Unit]
+Description=Odoo backup to the backup environment
+After=network-online.target postgresql.service
+ConditionPathExists=/etc/odoo/remote-backup/config.env
+
+[Service]
+Type=oneshot
+ExecStart=${JPS_DIR}/remote-backup.sh run --if-configured
+EOF
+cat > /etc/systemd/system/odoo-remote-backup.timer << 'EOF'
+[Unit]
+Description=Nightly Odoo backup to the backup environment
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=45m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # --- Automatic security updates (OS, nginx, Postgres minor releases) -----------
 # Odoo and wkhtmltopdf are held: they only change through update-odoo.sh.
 cat > /etc/apt/apt.conf.d/52odoo-jps << 'EOF'
@@ -208,6 +232,9 @@ systemctl daemon-reload
 "$JPS_DIR/write-nginx.sh"
 systemctl enable --quiet odoo nginx odoo-backup.timer certbot.timer unattended-upgrades
 systemctl start odoo-backup.timer certbot.timer
+if [ -s /etc/odoo/remote-backup/config.env ]; then
+  systemctl enable --now --quiet odoo-remote-backup.timer
+fi
 
 if db_exists; then
   systemctl restart odoo

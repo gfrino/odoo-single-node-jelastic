@@ -18,6 +18,7 @@ on redeploy.
 - [Performance](#performance)
 - [Upgrades](#upgrades)
 - [Backups and restore](#backups-and-restore)
+- [Off-node backups](#off-node-backups)
 - [Customising](#customising)
 - [Troubleshooting](#troubleshooting)
 - [Limits](#limits)
@@ -35,6 +36,7 @@ manifest's content):
 |---|---|---|
 | **New environment** | Create a new Odoo environment (installs the Odoo Manager add-on too) | `https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/manifest.jps` |
 | **Odoo Manager add-on** | Update the buttons and forms on an existing environment; choose the environment and the Odoo node in the dialog | `https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/addon.jps` |
+| **Backup environment** | Once per account and region: keeps off-node backups of all the Odoo environments ([details](#off-node-backups)) | `https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/backup-storage.jps` |
 
 To update an existing environment:
 
@@ -247,6 +249,61 @@ SSH:
 /opt/odoo/jps/restore.sh /var/backups/odoo/odoo-20260928-023012-daily.dump
 ```
 
+## Off-node backups
+
+The local backups above live on the Odoo node itself. A **backup environment** keeps a
+second, encrypted copy somewhere else, so that losing the Odoo environment does not mean
+losing the data.
+
+**Set up (once):** Import → URL →
+`https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/backup-storage.jps`,
+**in the same region** as the Odoo environments (they reach it over the Jelastic internal
+network). One backup environment serves all the Odoo environments of the account.
+
+**Connect each Odoo environment:** Odoo Manager → **☰ → Connect backup environment** →
+choose "new backup space for this environment". The result shows the **encryption
+password**: keep it somewhere safe too. A first backup runs immediately.
+
+From then on, every night after the local backup (~03:30) the database and the filestore
+are copied to the backup environment with [restic](https://restic.net):
+
+- **Encrypted** (AES-256) on the Odoo node, before anything leaves it.
+- **Deduplicated and compressed**: unchanged data is stored once, so a year of history
+  takes little more than a few copies.
+- **Kept**: the last 3, then 7 daily, 4 weekly and 12 monthly. The repository structure
+  is checked every Sunday.
+- Each Odoo environment has its **own SFTP-only account** on the backup node, locked in
+  its own directory, with its own SSH key and its own repository. It cannot open a shell,
+  a tunnel, or see the other environments' backups. The backup node's host keys are
+  pinned on the Odoo side.
+- The encryption password is also kept on the backup environment (readable by root
+  only), so a lost Odoo environment can be recovered without it.
+
+| Menu (☰) | What it does |
+|---|---|
+| **Connect backup environment** | Lists the backup environments of the account and the backup spaces on them |
+| **Back up to backup environment now** | Runs an off-node backup immediately |
+| **Restore from backup environment** | Drop-down of the off-node backups; a local backup of the current state is taken first |
+
+**Status** shows the connected backup environment and the last off-node backup. The
+backup environment has its own **Status** button: disk use and, per Odoo environment,
+number of backups, last one and size.
+
+### Recovering a lost Odoo environment
+
+1. Create a new Odoo environment (same Odoo version) with the new environment URL.
+2. Odoo Manager → **☰ → Connect backup environment** → choose **"take over the backups
+   of <lost environment>"**. The new environment now writes to that backup space (the
+   old one, if it ever comes back, can no longer).
+3. **☰ → Restore from backup environment** → pick the backup. Database and filestore
+   come back; `web.base.url` is set to the new environment's domain.
+4. Add the custom domains again (**Add domain**) and point their DNS to the new IP.
+
+Tested locally: backup, deduplication (a second run stored 120 KB of 4.6 MB), restore
+over a modified database, full recovery into a different environment (data and the lost
+environment's logins back), redeploy of the backup node (accounts and pinned host keys
+restored), and the SFTP account limits (no shell, no tunnel, no other client's files).
+
 ## Customising
 
 | To change | Put it in |
@@ -315,8 +372,11 @@ scripts/
   list-builds.sh           builds available for the installed version (Update Odoo drop-down)
   list-pg-versions.sh      newer PostgreSQL majors in PGDG (Upgrade PostgreSQL drop-down)
   list-backups.sh          backups on the node (Restore backup drop-down)
+  remote-backup.sh         off-node backups to the backup environment (restic over SFTP)
   upgrade-postgres.sh      PostgreSQL major upgrade
   status.sh                one-screen summary
+backup-storage.jps         JPS: the backup environment
+storage/                   scripts of the backup environment (accounts, sshd, status)
 tests/                     local test node (Ubuntu 24.04 + systemd in Docker)
 ```
 

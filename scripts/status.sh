@@ -21,4 +21,5 @@ if [ -s "$cert" ]; then
 fi
 last=$(ls -1t "$BACKUP_DIR"/*.dump 2> /dev/null | head -1 || true)
 echo "Last backup: ${last:-none}"
+"$JPS_DIR/remote-backup.sh" status 2> /dev/null | sed 's/^/             /; 1s/^ */Remote:      /' || true
 echo "Disk:        $(df -h --output=used,size,pcent / | tail -1 | awk '{print $1 " used of " $2 " (" $3 ")"}')"

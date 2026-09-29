@@ -1,0 +1,107 @@
+type: install
+id: odoo-backup-storage
+version: 1.0.0
+name: Odoo Backup Storage
+homepage: https://github.com/gfrino/odoo-single-node-jelastic
+logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
+targetRegions:
+  type: [vz.*, pcs.*]
+
+description:
+  short: Separate backup environment for Odoo Single Node environments (restic, encrypted, deduplicated).
+  text: |
+    One small Ubuntu 24.04 node that keeps off-node backups of any number of Odoo Single
+    Node environments. Each Odoo environment gets its own SFTP-only account, locked in
+    its own directory, and its own encrypted restic repository.
+    **Create it in the same region as the Odoo environments**: they reach it over the
+    Jelastic internal network. Then, on each Odoo environment: Odoo Manager →
+    **☰ → Connect backup environment**.
+
+skipNodeEmails: true
+
+globals:
+  repo: gfrino/odoo-single-node-jelastic
+  ref: main
+  scripts: /opt/odoo-backup
+
+nodes:
+  - nodeType: ubuntu-vps
+    tag: "24.04"
+    # "bk" is how the Odoo add-on recognises backup environments.
+    nodeGroup: bk
+    displayName: Odoo Backups
+    fixedCloudlets: 2
+    cloudlets: 8
+    volumes:
+      - /srv/odoo-backups
+      - /opt/odoo-backup
+
+onInstall:
+  - fetchScripts
+  - cmd[bk]: bash ${globals.scripts}/setup.sh
+    user: root
+  - installAddon:
+      id: odoo-backup-storage-tools
+      nodeGroup: bk
+
+# A redeploy gives a fresh image: re-create the client accounts and restore the SSH host
+# keys the Odoo environments have pinned (both kept on /srv/odoo-backups).
+onAfterRedeployContainer[bk]:
+  - cmd[bk]: bash ${globals.scripts}/setup.sh
+    user: root
+
+actions:
+  fetchScripts:
+    cmd[bk]: |-
+      set -e
+      command -v curl > /dev/null || { apt-get update -q && apt-get install -y -q curl; }
+      tmp=$(mktemp -d)
+      curl -fsSL https://codeload.github.com/${globals.repo}/tar.gz/${globals.ref} | tar -xz -C "$tmp" --strip-components=1
+      mkdir -p ${globals.scripts}
+      cp -a "$tmp"/storage/. ${globals.scripts}/
+      chmod 755 ${globals.scripts}/*.sh
+      rm -rf "$tmp"
+    user: root
+
+success: |
+  **Backup environment ready:** ${env.name}
+
+  On each Odoo environment (same region): Odoo Manager → **☰ → Connect backup
+  environment**, choose **${env.name}**. From then on every night's backup is also
+  copied here, encrypted, and kept 7 days, 4 weeks and 12 months.
+
+# Paths are literal here: the add-on is a separate manifest without this one's globals.
+addons:
+  - id: odoo-backup-storage-tools
+    type: update
+    name: Odoo Backup Storage
+    logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
+    description:
+      short: Status of the backups kept on this environment.
+    buttons:
+      - caption: Status
+        action: status
+      - caption: Update scripts
+        action: updateScripts
+        confirmText: Download the latest backup storage scripts from GitHub?
+    actions:
+      status:
+        - cmd[bk]: bash /opt/odoo-backup/status.sh
+          user: root
+        - return:
+            type: info
+            message: "```\n${response.out}\n```"
+      updateScripts:
+        - cmd[bk]: |-
+            set -e
+            tmp=$(mktemp -d)
+            curl -fsSL https://codeload.github.com/gfrino/odoo-single-node-jelastic/tar.gz/main | tar -xz -C "$tmp" --strip-components=1
+            cp -a "$tmp"/storage/. /opt/odoo-backup/
+            chmod 755 /opt/odoo-backup/*.sh
+            rm -rf "$tmp"
+            bash /opt/odoo-backup/setup.sh > /dev/null 2>&1
+            echo "Backup storage scripts updated"
+          user: root
+        - return:
+            type: success
+            message: ${response.out}
