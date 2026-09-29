@@ -152,14 +152,11 @@ settings:
           if (r.result !== 0) { notes.push(name + ": " + (r.error || r.result)); continue; }
           var repos = JSON.parse(String(r.responses[0].out)), mine = null;
           for (var j = 0; j < repos.length; j++) if (String(repos[j].repo) == me) mine = repos[j];
-          values.push({value: name + "/" + me, caption: name + " — " + (mine
-            ? "this environment's backups (" + mine.snapshots + ", last " + (mine.last || "-") + ")"
-            : "new backup space for this environment")});
           for (var k = 0; k < repos.length; k++) {
             var o = repos[k];
             if (String(o.repo) == me) continue;
-            values.push({value: name + "/" + o.repo, caption: name + " — take over the backups of " + o.repo +
-              " (" + o.snapshots + ", last " + (o.last || "-") + "): only to recover a lost environment"});
+            values.push({value: name + "/" + o.repo, caption: o.repo + " (" + o.snapshots + " backups, last " +
+              (o.last || "-") + ") on " + name});
           }
         }
       } catch (e) {
@@ -167,14 +164,15 @@ settings:
       }
       if (values.length) {
         // No preselected value: with one, Jelastic kept the submit button disabled.
-        settings.fields.push({name: "backupTarget", caption: "Backup to", type: "list", required: true,
+        settings.fields.push({name: "backupTarget", caption: "Backups of", type: "list", required: true,
           values: values});
         settings.fields.push({type: "displayfield", name: "connectNote", hideLabel: true,
-          markup: "Every night's backup is also copied there, encrypted (7 daily, 4 weekly, 12 monthly)." +
+          markup: "Only to recover a lost environment: this environment takes over that backup space " +
+            "(the lost one can no longer write to it). Then use Restore from backup environment." +
             (notes.length ? "<br>Not listed: " + notes.join("; ") : "")});
       } else {
         settings.fields.push({type: "displayfield", name: "noBackupEnv", hideLabel: true,
-          markup: "No backup environment found. Create one first: Import → URL " +
+          markup: "No backups of other environments found. To create a backup environment: Import → URL " +
             "https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/backup-storage.jps (same region)." +
             (notes.length ? "<br>" + notes.join("; ") : "")});
       }
@@ -298,9 +296,12 @@ menu:
     submitButtonText: Restore
   - caption: Connect backup environment
     action: connectBackup
+    confirmText: Copy this environment's backups every night to the backup environment of this account (encrypted)?
+  - caption: Recover backups of another environment
+    action: connectBackup
     settings: connectBackup
-    title: Off-node backups to a backup environment
-    submitButtonText: Connect
+    title: Take over the backups of a lost environment
+    submitButtonText: Take over
   - caption: Back up to backup environment now
     action: remoteBackup
   - caption: Restore from backup environment
@@ -392,8 +393,19 @@ actions:
   # Key on this node -> account on the backup node -> connect this node to it.
   connectBackup:
     - script: |
-        var sel = String("${settings.backupTarget:}").split("/"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
-        if (!bkEnv || !repo) return {result: 99, error: "Choose a backup environment in the list first."};
+        var me = "${env.name}", sel = String("${settings.backupTarget:}").split("/"), bkEnv = sel[0], repo = sel[1];
+        if (!bkEnv || !repo) {
+          // Plain "Connect": the first running backup environment of the account, this env's own space.
+          var envs = api.env.control.GetEnvs(), infos = (envs && envs.infos) || [];
+          for (var i = 0; i < infos.length && !bkEnv; i++) {
+            var nodes = infos[i].nodes || [];
+            for (var j = 0; j < nodes.length; j++) {
+              if (String(nodes[j].nodeGroup) == "bk" && (infos[i].env || {}).status == 1) { bkEnv = String(infos[i].env.envName); break; }
+            }
+          }
+          if (!bkEnv) return {result: 99, error: "No running backup environment in this account. Create one first: Import → URL https://raw.githubusercontent.com/gfrino/odoo-single-node-jelastic/main/backup-storage.jps (same region)."};
+          repo = me;
+        }
         function nodeOf(envName, group) {
           var info = api.env.control.GetEnvInfo(envName, session), nodes = (info && info.nodes) || [];
           for (var i = 0; i < nodes.length; i++) if (String(nodes[i].nodeGroup) == group) return nodes[i].id;

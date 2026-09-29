@@ -260,9 +260,10 @@ losing the data.
 **in the same region** as the Odoo environments (they reach it over the Jelastic internal
 network). One backup environment serves all the Odoo environments of the account.
 
-**Connect each Odoo environment:** Odoo Manager → **☰ → Connect backup environment** →
-choose "new backup space for this environment". The result shows the **encryption
-password**: keep it somewhere safe too. A first backup runs immediately.
+**Connect each Odoo environment:** Odoo Manager → **☰ → Connect backup environment**
+(no form: it uses the backup environment of the account and a backup space named after
+the Odoo environment). The result shows the **encryption password**: keep it somewhere
+safe too. A first backup runs immediately.
 
 From then on, every night after the local backup (~03:30) the database and the filestore
 are copied to the backup environment with [restic](https://restic.net):
@@ -281,7 +282,8 @@ are copied to the backup environment with [restic](https://restic.net):
 
 | Menu (☰) | What it does |
 |---|---|
-| **Connect backup environment** | Lists the backup environments of the account and the backup spaces on them |
+| **Connect backup environment** | Connects to the backup environment of the account (this environment's own backup space) and runs a first backup |
+| **Recover backups of another environment** | Drop-down of the other environments' backup spaces: take one over to recover a lost environment |
 | **Back up to backup environment now** | Runs an off-node backup immediately |
 | **Restore from backup environment** | Drop-down of the off-node backups; a local backup of the current state is taken first |
 
@@ -292,8 +294,8 @@ number of backups, last one and size.
 ### Recovering a lost Odoo environment
 
 1. Create a new Odoo environment (same Odoo version) with the new environment URL.
-2. Odoo Manager → **☰ → Connect backup environment** → choose **"take over the backups
-   of <lost environment>"**. The new environment now writes to that backup space (the
+2. Odoo Manager → **☰ → Recover backups of another environment** → choose the lost
+   environment's backups. The new environment now writes to that backup space (the
    old one, if it ever comes back, can no longer).
 3. **☰ → Restore from backup environment** → pick the backup. Database and filestore
    come back; `web.base.url` is set to the new environment's domain.
