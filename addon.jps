@@ -166,7 +166,9 @@ settings:
         notes.push(String(e));
       }
       if (values.length) {
-        settings.fields.push({name: "target", caption: "Backup to", type: "list", required: true,
+        // Not "required": Jelastic does not count a preselected value as filled in and
+        // greys out the button. The action checks the selection itself.
+        settings.fields.push({name: "target", caption: "Backup to", type: "list",
           values: values, value: values[0].value, default: values[0].value});
         settings.fields.push({type: "displayfield", name: "connectNote", hideLabel: true,
           markup: "Every night's backup is also copied there, encrypted (7 daily, 4 weekly, 12 monthly)." +
@@ -391,7 +393,8 @@ actions:
   # Key on this node -> account on the backup node -> connect this node to it.
   connectBackup:
     - script: |
-        var sel = String("${settings.target}").split("|"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
+        var sel = String("${settings.target:}").split("|"), bkEnv = sel[0], repo = sel[1], me = "${env.name}";
+        if (!bkEnv || !repo) return {result: 99, error: "Choose a backup environment in the list first."};
         function nodeOf(envName, group) {
           var info = api.env.control.GetEnvInfo(envName, session), nodes = (info && info.nodes) || [];
           for (var i = 0; i < nodes.length; i++) if (String(nodes[i].nodeGroup) == group) return nodes[i].id;
