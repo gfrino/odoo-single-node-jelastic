@@ -3,7 +3,8 @@
 # running after the editor disconnected. Runs every 5 minutes (odoo-ide-reaper.timer):
 #   - while they run, marks them as the first thing the kernel kills if memory runs out,
 #     so Odoo and PostgreSQL are never the victims;
-#   - stops them once no SSH session has been open for IDE_IDLE_MINUTES (default 20).
+#   - stops them once no SSH session has been open for IDE_IDLE_MINUTES (default 20;
+#     0 = never stop them). Set it in /etc/odoo/jps.env.
 # Nothing happens while someone is connected over SSH.
 
 . "$(dirname "$(readlink -f "$0")")/common.sh"
@@ -21,6 +22,9 @@ pids=$(pgrep -f -- "$pattern" || true)
 for p in $pids; do
   echo 1000 > "/proc/$p/oom_score_adj" 2> /dev/null || true
 done
+
+# IDE_IDLE_MINUTES=0: never stop them (only the OOM priority above applies).
+((idle_minutes > 0)) || exit 0
 
 # Inbound SSH sessions (through the Jelastic SSH gate or direct).
 if [ "$(ss -tnH state established '( sport = :22 )' | wc -l)" -gt 0 ]; then
