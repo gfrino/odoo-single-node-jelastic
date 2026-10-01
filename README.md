@@ -226,7 +226,7 @@ as needed; the sizing follows automatically.
   processes first, then Odoo workers, nginx and PostgreSQL last.
 - **Idle IDE servers**: Antigravity, VS Code, Cursor, Windsurf and VSCodium servers keep
   running (and using up to ~1 GB) after the editor disconnects. Every 5 minutes
-  `ide-reaper.sh` stops them once no SSH session has been open for 20 minutes
+  `ide-reaper.sh` stops them once no SSH session has been open for 40 minutes
   (`IDE_IDLE_MINUTES` in `/etc/odoo/jps.env`; `0` = never stop them). Nothing is
   touched while someone is connected: the IDE keeps an SSH session open.
 - **Per-worker memory limits** scale with the node (2 GB node: soft 598 MB, hard 921 MB;

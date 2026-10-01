@@ -3,14 +3,14 @@
 # running after the editor disconnected. Runs every 5 minutes (odoo-ide-reaper.timer):
 #   - while they run, marks them as the first thing the kernel kills if memory runs out,
 #     so Odoo and PostgreSQL are never the victims;
-#   - stops them once no SSH session has been open for IDE_IDLE_MINUTES (default 20;
+#   - stops them once no SSH session has been open for IDE_IDLE_MINUTES (default 40;
 #     0 = never stop them). Set it in /etc/odoo/jps.env.
 # Nothing happens while someone is connected over SSH.
 
 . "$(dirname "$(readlink -f "$0")")/common.sh"
 load_state
 
-idle_minutes=${IDE_IDLE_MINUTES:-20}
+idle_minutes=${IDE_IDLE_MINUTES:-40}
 # Only programs started from an IDE server directory (argv[0], possibly behind sh), not
 # any command line that merely mentions it (e.g. someone's grep).
 pattern='^((ba)?sh )?/[^ ]*/\.(antigravity-ide-server|vscode-server|cursor-server|windsurf-server|vscodium-server)/'
