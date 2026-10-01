@@ -218,6 +218,23 @@ and a 720 s proxy timeout for long reports.
 Default resources: 4 reserved cloudlets, up to 32. Change them in the Jelastic topology
 as needed; the sizing follows automatically.
 
+### Node tuning
+
+`optimize-node.sh` (run by the installer, also after every redeploy):
+
+- **OOM priorities**: if memory runs out, the kernel kills remote IDE servers and other
+  processes first, then Odoo workers, nginx and PostgreSQL last.
+- **Idle IDE servers**: Antigravity, VS Code, Cursor, Windsurf and VSCodium servers keep
+  running (and using up to ~1 GB) after the editor disconnects. Every 5 minutes
+  `ide-reaper.sh` stops them once no SSH session has been open for 20 minutes
+  (`IDE_IDLE_MINUTES` in `/etc/odoo/jps.env`). Nothing is touched while someone is
+  connected.
+- **Per-worker memory limits** scale with the node (2 GB node: soft 598 MB, hard 921 MB;
+  from ~3.5 GB: the Odoo guide's 600 MB / 1.6 GB), so a single report cannot take the
+  whole node.
+- Systemd journal capped at 100 MB; daily disk indexing (plocate), man-db and MOTD news
+  jobs and the image's unused local mail daemons are switched off.
+
 ## Upgrades
 
 | What | How | Downtime |
@@ -377,6 +394,8 @@ scripts/
   remote-backup.sh         off-node backups to the backup environment (restic over SFTP)
   upgrade-postgres.sh      PostgreSQL major upgrade
   status.sh                one-screen summary
+  optimize-node.sh         OOM priorities, journal cap, unused OS jobs off
+  ide-reaper.sh            stops remote IDE servers left running without an SSH session
 backup-storage.jps         JPS: the backup environment
 storage/                   scripts of the backup environment (accounts, sshd, status)
 tests/                     local test node (Ubuntu 24.04 + systemd in Docker)

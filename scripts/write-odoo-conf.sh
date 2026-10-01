@@ -20,6 +20,11 @@ workers=$(clamp "$workers" 2 32)
 cron=1
 ((workers >= 8)) && cron=2
 
+# Per-worker memory limits (Odoo guide values: soft 600 MB, hard 1.6 GB) scaled down on
+# small nodes: a single report must not be able to take the whole node.
+hard_mb=$(clamp $((mem * 45 / 100)) 640 1600)
+soft_mb=$(clamp $((hard_mb * 65 / 100)) 384 600)
+
 # Addons path: core addons, then for /mnt/extra-addons (and the pre-1.1 /opt/odoo/addons)
 # the directory itself if it holds modules, plus every first-level directory that holds
 # modules (e.g. a git checkout of an OCA repository), then every repository cloned
@@ -69,8 +74,8 @@ data_dir = ${ODOO_DATA}
 addons_path = ${addons_path}
 workers = ${workers}
 max_cron_threads = ${cron}
-limit_memory_soft = 629145600
-limit_memory_hard = 1677721600
+limit_memory_soft = $((soft_mb * 1048576))
+limit_memory_hard = $((hard_mb * 1048576))
 limit_time_cpu = 600
 limit_time_real = 1200
 limit_request = 65536

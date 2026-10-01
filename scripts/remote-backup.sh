@@ -8,7 +8,7 @@
 #   remote-backup.sh run [--if-configured]       back up now, then apply retention
 #   remote-backup.sh snapshots [--json]          list the remote backups
 #   remote-backup.sh restore <snapshot-id>       restore database and filestore
-#   remote-backup.sh status | disconnect
+#   remote-backup.sh status | disconnect | install-timer
 #
 # Configuration and key live on the /etc/odoo volume, so they survive a redeploy.
 
@@ -43,6 +43,37 @@ ensure_restic() {
   log "Installing restic"
   apt-get update -q > /dev/null
   "${APT_INSTALL[@]}" restic openssh-client > /dev/null
+}
+
+# Nightly timer, after the local backup. Written here (not only by install.sh) so that
+# environments installed before off-node backups existed get it when they connect.
+install_timer() {
+  cat > /etc/systemd/system/odoo-remote-backup.service << EOF
+[Unit]
+Description=Odoo backup to the backup environment
+After=network-online.target postgresql.service
+ConditionPathExists=$RB_CONF
+
+[Service]
+Type=oneshot
+ExecStart=$JPS_DIR/remote-backup.sh run --if-configured
+EOF
+  cat > /etc/systemd/system/odoo-remote-backup.timer << 'EOF'
+[Unit]
+Description=Nightly Odoo backup to the backup environment
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=45m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  if [ -s "$RB_CONF" ]; then
+    systemctl enable --now --quiet odoo-remote-backup.timer
+  fi
 }
 
 cmd=${1:-status}
@@ -97,8 +128,8 @@ case $cmd in
       restic_ init --repository-version 2 > /dev/null
       log "Repository $repo created on $env"
     fi
-    systemctl enable --now odoo-remote-backup.timer > /dev/null 2>&1 || true
-    echo "Connected to $env (repository $repo)."
+    install_timer
+    echo "Connected to $env (repository $repo). Next automatic backup: $(systemctl list-timers odoo-remote-backup.timer --no-legend | awk '{print $1, $2, $3}')"
     echo "Encryption password (also kept on the backup environment): $(cat "$RB_PASS")"
     ;;
 
@@ -181,10 +212,16 @@ print(json.dumps([{"id": s["short_id"], "time": s["time"][:19].replace("T", " ")
     log "Snapshot $id restored"
     ;;
 
+  install-timer)
+    install_timer
+    ;;
+
   status)
     if load_remote; then
       echo "Backup environment: $RB_ENV (repository $RB_REPO, $RB_USER@$RB_HOST)"
       echo "Last remote backup: $(cat "$RB_LAST" 2> /dev/null || echo never)"
+      next=$(systemctl list-timers odoo-remote-backup.timer --no-legend 2> /dev/null | awk '{print $1, $2, $3}')
+      echo "Next remote backup: ${next:-NOT SCHEDULED (run: remote-backup.sh install-timer)}"
     else
       echo "Backup environment: not connected"
     fi

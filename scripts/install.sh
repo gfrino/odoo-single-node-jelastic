@@ -179,29 +179,8 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-# --- Off-node copy to the backup environment (only once one is connected) --------
-cat > /etc/systemd/system/odoo-remote-backup.service << EOF
-[Unit]
-Description=Odoo backup to the backup environment
-After=network-online.target postgresql.service
-ConditionPathExists=/etc/odoo/remote-backup/config.env
-
-[Service]
-Type=oneshot
-ExecStart=${JPS_DIR}/remote-backup.sh run --if-configured
-EOF
-cat > /etc/systemd/system/odoo-remote-backup.timer << 'EOF'
-[Unit]
-Description=Nightly Odoo backup to the backup environment
-
-[Timer]
-OnCalendar=*-*-* 03:30
-RandomizedDelaySec=45m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
+# --- Off-node copy to the backup environment (timer active only once connected) ---
+"$JPS_DIR/remote-backup.sh" install-timer
 
 # --- Automatic security updates (OS, nginx, Postgres minor releases) -----------
 # Odoo and wkhtmltopdf are held: they only change through update-odoo.sh.
@@ -232,9 +211,7 @@ systemctl daemon-reload
 "$JPS_DIR/write-nginx.sh"
 systemctl enable --quiet odoo nginx odoo-backup.timer certbot.timer unattended-upgrades
 systemctl start odoo-backup.timer certbot.timer
-if [ -s /etc/odoo/remote-backup/config.env ]; then
-  systemctl enable --now --quiet odoo-remote-backup.timer
-fi
+"$JPS_DIR/optimize-node.sh"
 
 if db_exists; then
   systemctl restart odoo
