@@ -18,6 +18,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Scripts updated since the last run (e.g. "Update scripts" from an older add-on):
+# apply what they need before backing up. Never blocks the backup.
+current=$(md5sum "$JPS_DIR"/*.sh 2> /dev/null | md5sum | cut -c1-12)
+if [ "$current" != "$(cat /etc/odoo/scripts-applied 2> /dev/null)" ]; then
+  "$JPS_DIR/post-update.sh" || log "WARNING: post-update failed, backing up anyway"
+fi
+
 db_exists || { log "No database $DB_NAME, nothing to back up"; exit 0; }
 
 mkdir -p "$BACKUP_DIR"

@@ -454,7 +454,8 @@ actions:
         cp -a "$tmp"/scripts/. /opt/odoo/jps/
         chmod 755 /opt/odoo/jps/*.sh
         rm -rf "$tmp"
-        echo "Scripts updated from gfrino/odoo-single-node-jelastic@main"
+        bash /opt/odoo/jps/post-update.sh > /dev/null 2>&1 || true
+        echo "Scripts updated from gfrino/odoo-single-node-jelastic@main and applied"
       user: root
     - return:
         type: success

@@ -180,7 +180,6 @@ WantedBy=timers.target
 EOF
 
 # --- Off-node copy to the backup environment (timer active only once connected) ---
-"$JPS_DIR/remote-backup.sh" install-timer
 
 # --- Automatic security updates (OS, nginx, Postgres minor releases) -----------
 # Odoo and wkhtmltopdf are held: they only change through update-odoo.sh.
@@ -211,7 +210,7 @@ systemctl daemon-reload
 "$JPS_DIR/write-nginx.sh"
 systemctl enable --quiet odoo nginx odoo-backup.timer certbot.timer unattended-upgrades
 systemctl start odoo-backup.timer certbot.timer
-"$JPS_DIR/optimize-node.sh"
+"$JPS_DIR/post-update.sh"
 
 if db_exists; then
   systemctl restart odoo

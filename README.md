@@ -40,8 +40,11 @@ manifest's content):
 
 To update an existing environment:
 
-1. **Scripts** (backup, SSL, updates, …): Odoo Manager → **☰ → Update scripts**.
-   No reinstall needed.
+1. **Scripts** (backup, SSL, updates, node tuning, …): Odoo Manager → **☰ → Update
+   scripts**. What they need on the system (timers, tuning) is applied right away by
+   `post-update.sh`; with an add-on older than 1.2 it is applied before the next nightly
+   backup. Changes to Odoo's own settings (e.g. memory limits) take effect at the next
+   Odoo restart.
 2. **Add-on** (buttons, menus, forms): Odoo Manager tile → **☰ → Disinstalla**, then
    import the add-on URL above. Uninstalling only removes the buttons: Odoo, data and
    certificates are not touched. The environment only appears in the dialog once the
@@ -395,6 +398,7 @@ scripts/
   upgrade-postgres.sh      PostgreSQL major upgrade
   status.sh                one-screen summary
   optimize-node.sh         OOM priorities, journal cap, unused OS jobs off
+  post-update.sh           applies new scripts to an existing install (no restart)
   ide-reaper.sh            stops remote IDE servers left running without an SSH session
 backup-storage.jps         JPS: the backup environment
 storage/                   scripts of the backup environment (accounts, sshd, status)
