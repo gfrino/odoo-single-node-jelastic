@@ -1,6 +1,6 @@
 type: install
 id: odoo-single-node
-version: 1.2.0
+version: 1.3.0
 name: Odoo Single Node
 homepage: https://github.com/gfrino/odoo-single-node-jelastic
 logo: https://raw.githubusercontent.com/jelastic-jps/odoo/master/images/odoo-logo.png
@@ -28,6 +28,7 @@ globals:
   publicIpNote: ""
   networkCheck: ""
   certNote: ""
+  reservedCloudlets: ""
 
 onBeforeInit: |
   var settings = jps.settings || {fields: []};
@@ -120,6 +121,7 @@ nodes:
 
 onInstall:
   - fetchScripts
+  - saveReservedCloudlets
   - cmd[cp]: bash ${globals.jps}/install.sh --version ${settings.version} --email '${settings.adminEmail}' --domain ${env.domain} --lang ${settings.lang}
     user: root
   - cmd[cp]: ADMIN_PASSWORD='${globals.adminPassword}' bash ${globals.jps}/init-db.sh
@@ -143,8 +145,10 @@ onAfterRedeployContainer[cp]:
   - cmd[cp]: bash ${globals.jps}/install.sh
     user: root
 
-# Vertical scaling: resize Postgres and the Odoo workers to the new RAM limit.
+# Vertical scaling: resize Postgres to the new RAM limit and the Odoo workers to the
+# new reserved cloudlets.
 onAfterSetCloudletCount[cp]:
+  - saveReservedCloudlets
   - cmd[cp]: bash ${globals.jps}/tune-postgres.sh --restart && systemctl restart odoo
     user: root
 
@@ -219,6 +223,30 @@ actions:
       user: root
     - setGlobals:
         certNote: ${response.out}
+
+  # The Odoo workers are sized on the reserved cloudlets (paid around the clock), not on
+  # the limit: the node cannot see them, so they are saved in its state (RESERVED_CLOUDLETS,
+  # read by write-odoo-conf.sh at the next Odoo start). Not fatal: without it the sizing
+  # falls back to the limit.
+  saveReservedCloudlets:
+    - script: |
+        var n = "";
+        try {
+          var info = api.environment.control.GetEnvInfo({envName: "${env.name}"});
+          var nodes = (info && info.nodes) || [];
+          for (var i = 0; i < nodes.length; i++) {
+            if (String(nodes[i].nodeGroup) == "cp") { n = String(nodes[i].fixedCloudlets || ""); break; }
+          }
+        } catch (e) {}
+        return {result: 0, onAfterReturn: {setGlobals: {reservedCloudlets: n}}};
+    - cmd[cp]: |-
+        n='${globals.reservedCloudlets}'
+        if [[ "$n" =~ ^[0-9]+$ ]]; then
+          bash -c '. ${globals.jps}/common.sh && set_state RESERVED_CLOUDLETS "$1"' _ "$n" && echo "reserved cloudlets: $n"
+        else
+          echo "reserved cloudlets unknown: workers sized on the limit"
+        fi
+      user: root
 
   fetchScripts:
     cmd[cp]: |-

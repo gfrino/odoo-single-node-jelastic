@@ -112,4 +112,18 @@ download_odoo_deb() {
 mem_mb() { awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo; }
 cpu_count() { nproc; }
 
+# RAM the Odoo worker count is sized on: the reserved cloudlets (paid around the clock)
+# when the manifest saved them in the state (RESERVED_CLOUDLETS), otherwise the limit.
+# Dynamic cloudlets above the reserved ones absorb peaks (a heavy report) without
+# keeping extra idle workers resident. Needs load_state first.
+sizing_mem_mb() {
+  local mem reserved
+  mem=$(mem_mb)
+  if [[ "${RESERVED_CLOUDLETS:-}" =~ ^[0-9]+$ ]] && ((RESERVED_CLOUDLETS > 0)); then
+    reserved=$((RESERVED_CLOUDLETS * 128))
+    ((reserved < mem)) && mem=$reserved
+  fi
+  echo "$mem"
+}
+
 clamp() { local v=$1 lo=$2 hi=$3; ((v < lo)) && v=$lo; ((v > hi)) && v=$hi; echo "$v"; }

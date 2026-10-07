@@ -13,8 +13,13 @@ echo "PostgreSQL:  ${PG_MAJOR:-?} [$(state "postgresql@${PG_MAJOR:-0}-main")] - 
 echo "nginx:       $(nginx -v 2>&1 | sed 's|.*/||') [$(state nginx)]"
 echo "Database:    $DB_NAME ($(psql_admin -d postgres -c "SELECT pg_size_pretty(pg_database_size('$DB_NAME'))" 2> /dev/null || echo '?'))"
 echo "Filestore:   $(du -sh "$ODOO_DATA/filestore/$DB_NAME" 2> /dev/null | cut -f1 || echo '?')"
-echo "Workers:     $(awk -F' = ' '$1 == "workers" {print $2}' "$ODOO_CONF") (RAM $(mem_mb) MB, $(cpu_count) CPU)"
-echo "Domains:     ${ENV_DOMAIN:-?} ${DOMAINS:-}"
+sized_on=""
+[ "$(sizing_mem_mb)" != "$(mem_mb)" ] && sized_on=", sized on $(sizing_mem_mb) MB reserved"
+echo "Workers:     $(awk -F' = ' '$1 == "workers" {print $2}' "$ODOO_CONF") (RAM $(mem_mb) MB${sized_on}, $(cpu_count) CPU)"
+# The environment domain usually is in DOMAINS too (it gets a certificate): list it once.
+# shellcheck disable=SC2086
+domains=$(printf '%s\n' ${ENV_DOMAIN:-} ${DOMAINS:-} | awk 'NF && !seen[$0]++' | paste -sd ' ' -)
+echo "Domains:     ${domains:-?}"
 cert=/etc/letsencrypt/live/odoo/fullchain.pem
 if [ -s "$cert" ]; then
   echo "Certificate: expires $(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)"

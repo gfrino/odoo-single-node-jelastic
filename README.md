@@ -175,7 +175,7 @@ Running any script twice gives the same result; no block can ever be duplicated.
 | Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → attach the public IP → install the add-on |
 | Before redeploy | Backup (`pre-redeploy`) |
 | After redeploy | `install.sh` (reprovision on the new image) |
-| After changing cloudlets | Retune PostgreSQL and restart Odoo with new worker count |
+| After changing cloudlets | Save the reserved cloudlets, retune PostgreSQL and restart Odoo with the new worker count |
 
 ## Security
 
@@ -201,16 +201,18 @@ Running any script twice gives the same result; no block can ever be duplicated.
 
 ## Performance
 
-Sizing is recalculated from the RAM the node can use (the cloudlet limit), both at
-install and after every change of cloudlets:
+Sizing is recalculated both at install and after every change of cloudlets. The Odoo
+workers follow the **reserved** cloudlets: they stay in memory all day, and on Jelastic
+that RAM is paid every hour even when nobody works. The dynamic cloudlets above the
+reserved ones absorb peaks (a heavy report). Everything else follows the cloudlet limit:
 
-| Setting | Rule | With 32 cloudlets (4 GB) |
+| Setting | Rule | Example |
 |---|---|---|
-| Odoo workers | ~55% of RAM ÷ 325 MB per worker (Odoo deployment guide), at most 2×CPU+1 | 5–6 |
+| Odoo workers | ~55% of the **reserved** RAM ÷ 325 MB per worker (Odoo deployment guide), at least 2, at most 2×CPU+1 | 4–16 reserved: 2 · 24: 4 · 32: 6 |
 | Cron threads | 1, or 2 from 8 workers up | 1 |
 | Worker memory limits | soft 600 MB / hard 1.6 GB (Odoo guide values) | |
-| `shared_buffers` | 15% of RAM | ~600 MB |
-| `effective_cache_size` | 50% of RAM | ~2 GB |
+| `shared_buffers` | 15% of the limit | ~600 MB with 32 cloudlets |
+| `effective_cache_size` | 50% of the limit | ~2 GB with 32 cloudlets |
 | `work_mem` | 16 MB (32 MB from 8 GB up) | 16 MB |
 | PostgreSQL JIT | off (Odoo runs many short queries) | |
 
@@ -218,8 +220,12 @@ nginx adds: HTTP/2, gzip, a 1 GB cache for `/<module>/static/` (7 days in the br
 keep-alive to Odoo, websockets on the gevent port with a 1 h timeout, 256 MB uploads
 and a 720 s proxy timeout for long reports.
 
-Default resources: 4 reserved cloudlets, up to 32. Change them in the Jelastic topology
-as needed; the sizing follows automatically.
+Default resources: 4 reserved cloudlets (2 workers), up to 32. For more workers raise
+the reserved cloudlets in the Jelastic topology (the sizing follows automatically) or fix
+the number in `/etc/odoo/odoo.local.conf` (`workers = 4`). The installer saves the reserved
+cloudlets in `/etc/odoo/jps.env` (`RESERVED_CLOUDLETS`) at install, after every change of
+cloudlets and on **Update scripts**; until then the workers follow the limit as before.
+**Status** shows which RAM the workers are sized on.
 
 ### Node tuning
 
@@ -330,7 +336,7 @@ restored), and the SFTP account limits (no shell, no tunnel, no other client's f
 
 | To change | Put it in |
 |---|---|
-| Any `odoo.conf` option (SMTP, limits, `log_level`, ...) | `/etc/odoo/odoo.local.conf`, in an `[options]` section. It is merged over the generated file on every Odoo start |
+| Any `odoo.conf` option (workers, SMTP, limits, `log_level`, ...) | `/etc/odoo/odoo.local.conf`, in its `[options]` section. The file is created empty, with commented examples, by the installer (and on older nodes by the next **Update scripts** or nightly backup); it is never overwritten. It is merged over the generated file on every Odoo start |
 | PostgreSQL settings | `/etc/postgresql/<N>/main/conf.d/99-local.conf` |
 | Ubuntu packages a module needs (e.g. `python3-pylibdmtx`) | `/etc/odoo/apt-packages`, one per line. The installer installs them, also again after every redeploy: `echo python3-pylibdmtx >> /etc/odoo/apt-packages && /opt/odoo/jps/install.sh` |
 | Custom modules | `/mnt/extra-addons/<module>`, or whole repositories: inside it (`/mnt/extra-addons/oca-web`) or cloned directly under `/mnt` (`git clone -b 20.0 … /mnt/extra-addons-tw`). The addons path is rebuilt on every Odoo start: `systemctl restart odoo`, then **Apps → Update Apps List**. If the same module is in two places, Odoo uses the first one and the conflict is logged in `/var/log/odoo-jps.log` |

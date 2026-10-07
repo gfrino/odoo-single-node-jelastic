@@ -447,6 +447,7 @@ actions:
         message: "```\n${response.out}\n```"
 
   updateScripts:
+    - saveReservedCloudlets
     - cmd[cp]: |-
         set -e
         tmp=$(mktemp -d)
@@ -455,8 +456,29 @@ actions:
         chmod 755 /opt/odoo/jps/*.sh
         rm -rf "$tmp"
         bash /opt/odoo/jps/post-update.sh > /dev/null 2>&1 || true
-        echo "Scripts updated from gfrino/odoo-single-node-jelastic@main and applied"
+        echo "Scripts updated from gfrino/odoo-single-node-jelastic@main and applied (worker sizing changes apply at the next Odoo restart)"
       user: root
     - return:
         type: success
         message: ${response.out}
+
+  # Same as in manifest.jps: Odoo workers are sized on the reserved cloudlets.
+  saveReservedCloudlets:
+    - script: |
+        var n = "";
+        try {
+          var info = api.environment.control.GetEnvInfo({envName: "${env.name}"});
+          var nodes = (info && info.nodes) || [];
+          for (var i = 0; i < nodes.length; i++) {
+            if (String(nodes[i].nodeGroup) == "cp") { n = String(nodes[i].fixedCloudlets || ""); break; }
+          }
+        } catch (e) {}
+        return {result: 0, onAfterReturn: {setGlobals: {reservedCloudlets: n}}};
+    - cmd[cp]: |-
+        n='${globals.reservedCloudlets}'
+        if [[ "$n" =~ ^[0-9]+$ ]]; then
+          bash -c '. /opt/odoo/jps/common.sh && set_state RESERVED_CLOUDLETS "$1"' _ "$n" && echo "reserved cloudlets: $n"
+        else
+          echo "reserved cloudlets unknown: workers sized on the limit"
+        fi
+      user: root

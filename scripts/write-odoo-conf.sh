@@ -9,12 +9,15 @@ load_state
 [ -n "${ODOO_VERSION:-}" ] || die "no ODOO_VERSION in $STATE_FILE"
 
 mem=$(mem_mb)
+sizing=$(sizing_mem_mb)
 cpus=$(cpu_count)
 
 # Sizing follows the Odoo deployment guide: one worker needs ~325 MB on average
 # (80% light requests at ~150 MB, 20% heavy ones at ~1 GB). Odoo gets ~55% of the
-# node's RAM; Postgres, nginx and the OS keep the rest (see tune-postgres.sh).
-odoo_budget=$((mem * 55 / 100 - 200))
+# RAM; Postgres, nginx and the OS keep the rest (see tune-postgres.sh). The RAM is the
+# reserved cloudlets when known (see sizing_mem_mb): idle workers cost RAM all day.
+# Per-worker memory limits below stay on the full limit ($mem).
+odoo_budget=$((sizing * 55 / 100 - 200))
 workers=$(clamp $((odoo_budget / 325)) 2 $((cpus * 2 + 1)))
 workers=$(clamp "$workers" 2 32)
 cron=1
