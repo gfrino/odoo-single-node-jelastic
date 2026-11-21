@@ -35,6 +35,8 @@ fi
 
 "$JPS_DIR/remote-backup.sh" install-timer
 "$JPS_DIR/optimize-node.sh" > /dev/null
+# Environment domain on the public IP without a certificate ("Not secure"): retry it.
+"$JPS_DIR/cert-env.sh" check || true
 systemctl daemon-reload
 md5sum "$JPS_DIR"/*.sh 2> /dev/null | md5sum | cut -c1-12 > /etc/odoo/scripts-applied
 log "Post-update applied (scripts $(cat /etc/odoo/scripts-applied))"

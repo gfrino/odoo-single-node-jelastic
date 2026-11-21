@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.1] - 2026-11-21
+
+### Fixed
+- The environment domain no longer stays on "Not secure" when the Let's Encrypt
+  certificate fails at install. The new `cert-env.sh` waits for the DNS, tries three
+  times, and if it still fails starts `odoo-cert-env.timer`, which retries every
+  15 minutes (below Let's Encrypt's limit of 5 failed validations per hour) and stops
+  as soon as the certificate is there, or after two days.
+- `post-update.sh` (Update scripts, nightly backup) starts the same retries on existing
+  environments whose domain reaches the node through the public IP without a
+  certificate. Environments without a public IP are not touched (the Jelastic resolver
+  already serves a valid certificate).
+- The certificate warning is shown right under the Odoo URL in the success message,
+  and **Status** says when the retries are running.
+
+### Why
+- A new environment (climacontrol20) opened with "Not secure": with a public IP the
+  environment domain reaches the node directly, which serves its self-signed certificate
+  until Let's Encrypt succeeds. The single attempt at install had failed and nothing
+  retried it; the warning was the last line of the success message.
+
 ## [1.3.0] - 2026-10-07
 
 ### Changed

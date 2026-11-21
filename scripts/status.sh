@@ -24,6 +24,8 @@ cert=/etc/letsencrypt/live/odoo/fullchain.pem
 if [ -s "$cert" ]; then
   echo "Certificate: expires $(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)"
 fi
+pending=$("$JPS_DIR/cert-env.sh" status 2> /dev/null || true)
+[ -z "$pending" ] || echo "Certificate: $pending"
 last=$(ls -1t "$BACKUP_DIR"/*.dump 2> /dev/null | head -1 || true)
 echo "Last backup: ${last:-none}"
 "$JPS_DIR/remote-backup.sh" status 2> /dev/null | sed 's/^/             /; 1s/^ */Remote:      /' || true

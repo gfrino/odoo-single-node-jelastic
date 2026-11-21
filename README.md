@@ -172,7 +172,7 @@ Running any script twice gives the same result; no block can ever be duplicated.
 
 | Jelastic event | Action |
 |---|---|
-| Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → attach the public IP → install the add-on |
+| Install | Download scripts → `install.sh` → `init-db.sh` → open TCP 80/443 in the Jelastic firewall → attach the public IP → Let's Encrypt for the environment domain (`cert-env.sh`, retried every 15 min for two days if it fails) → install the add-on |
 | Before redeploy | Backup (`pre-redeploy`) |
 | After redeploy | `install.sh` (reprovision on the new image) |
 | After changing cloudlets | Save the reserved cloudlets, retune PostgreSQL and restart Odoo with the new worker count |
@@ -367,6 +367,7 @@ Do not edit the generated files (`odoo.conf`, `/etc/nginx/sites-available/odoo`,
 | 502 from nginx | Odoo is down or restarting: see above. `nginx -t` for config errors |
 | Custom domain unreachable, Let's Encrypt times out | The VPS firewall only opens 21/22/25 by default. The installer adds TCP 80 and 443; check **Settings → Firewall** (the success message says if it could not) |
 | **Add domain** refuses the domain | The DNS A record does not point to this node's public IP yet (or is still cached) |
+| Environment domain shows "Not secure" right after the install | With a public IP the environment domain reaches the node, which serves a self-signed certificate until Let's Encrypt succeeds. **Status** says if the retries are running; `/tmp/cert-env-domain.log` has the last error; **Add domain** with the environment domain retries at once |
 | Certificate not renewing | `certbot renew --dry-run`, `systemctl list-timers certbot.timer` |
 | Database | `runuser -u postgres -- psql odoo` |
 
@@ -395,6 +396,7 @@ scripts/
   tune-postgres.sh         PostgreSQL sizing and access rules
   write-nginx.sh           generates the whole nginx configuration
   ssl.sh                   Let's Encrypt: add / remove / renew / status
+  cert-env.sh              Let's Encrypt for the environment domain, retried by a timer
   backup.sh, restore.sh    backups and restore
   update-odoo.sh           same-major Odoo update with rollback
   list-builds.sh           builds available for the installed version (Update Odoo drop-down)
