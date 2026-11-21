@@ -46,8 +46,21 @@ issue() {
     log "Let's Encrypt certificate issued for $env_domain"
     return 0
   fi
-  log "Let's Encrypt for $env_domain failed: $(tail -1 "$ISSUE_LOG")"
+  log "Let's Encrypt for $env_domain failed: $(last_error)"
   return 1
+}
+
+# The useful line of the last failure: Let's Encrypt's "Detail:" when there is one,
+# otherwise the last message that is not the generic "... exited with N" trap line.
+last_error() {
+  local detail
+  detail=$({ grep -m1 -oE 'Detail: .*' "$ISSUE_LOG" 2> /dev/null || true; } | sed 's/^Detail: //')
+  if [ -n "$detail" ]; then
+    echo "$detail"
+    return 0
+  fi
+  { grep -vE 'exited with [0-9]+$|^[[:space:]]*$|community\.letsencrypt\.org' "$ISSUE_LOG" 2> /dev/null || true; } |
+    tail -1 | sed 's/^\[[^]]*\] //'
 }
 
 write_timer() {
@@ -107,7 +120,7 @@ case $cmd in
       if [ "$attempt" -lt 3 ]; then sleep 60; fi
     done
     start_retries
-    echo "**Certificate:** Let's Encrypt for ${env_domain} is not issued yet ($(tail -1 "$ISSUE_LOG")). Until it is, the browser shows \"Not secure\". The node retries every 15 minutes for two days; to retry now use **Odoo Manager → Add domain** with ${env_domain}."
+    echo "**Certificate:** Let's Encrypt for ${env_domain} is not issued yet ($(last_error)). Until it is, the browser shows \"Not secure\". The node retries every 15 minutes for two days; to retry now use **Odoo Manager → Add domain** with ${env_domain}."
     ;;
 
   retry)
